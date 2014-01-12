@@ -7,6 +7,8 @@
 #include <task_part_sim/simDet.h>
 #include <task_part_sim/robLocate.h>
 #include <task_part_sim/objLocate.h>
+#include <task_part_sim/robObj.h>
+#include <task_part_sim/logInfo.h>
 using namespace std;
 
 #define neighSearch 0
@@ -17,7 +19,7 @@ using namespace std;
 int robotID=0;
 
 int state=randWalk,startFlag=0;
-float robotSpeed=0.001,direction;
+float robotSpeed=0.001,direction,objMin,robMin;
 
 task_part_sim::robLocate myLoc;
 visualization_msgs::Marker marker;
@@ -49,13 +51,15 @@ struct objectList{
 int id;
 float x;
 float y;
-}tempObj;
+float dist;
+}tempObj,curObj;
 
 struct robotList{
 int id;
 float x;
 float y;
-}tempRob;
+float dist;
+}tempRob,curRob;
 
 vector<robotList> roboLoc;
 vector<objectList> objLoc;
@@ -117,6 +121,7 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
         tempRob.id=i;
         tempRob.x=INT_MAX;
         tempRob.y=INT_MAX;
+        tempRob.dist=INT_MAX;
         roboLoc.push_back(tempRob);
     }
 
@@ -125,6 +130,7 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
         tempObj.id=i;
         tempObj.x=INT_MAX;
         tempObj.y=INT_MAX;
+        tempObj.dist=INT_MAX;
         objLoc.push_back(tempObj);
     }
 
@@ -140,14 +146,17 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
 
     //setting goal value
     {
-        nest.x1=msg->goalX;
-        nest.y1=msg->goalY;
-        nest.x2=msg->goalX;
-        nest.y2=msg->goalY+msg->goalL;
-        nest.x3=msg->goalX+msg->goalW;
-        nest.y3=msg->goalY;
-        nest.x=msg->goalX+(msg->goalW/2);
-        nest.y=msg->goalY+(msg->goalL/2);
+        nest.x=msg->goalX;
+        nest.y=msg->goalY;
+
+        nest.x2=msg->goalX+(msg->goalW/2);
+        nest.y2=msg->goalY-(msg->goalL/2);
+
+        nest.x3=msg->goalX-(msg->goalW/2);
+        nest.y3=msg->goalY+(msg->goalL/2);
+
+        nest.x1=msg->goalX+(msg->goalW/2);
+        nest.y1=msg->goalY+(msg->goalL/2);
     }
 }
 
@@ -166,7 +175,7 @@ void objectLocator(const task_part_sim::objLocate::ConstPtr& msg)
 int main( int argc, char** argv )
 {
 node_init();
-ros::init(argc, argv, "task_part_sim");
+ros::init(argc, argv, "myRobots");
 ros::NodeHandle n;
 ros::Publisher rviz = n.advertise<visualization_msgs::Marker>("visualization_marker", 1);
 ros::Publisher myLocate = n.advertise<task_part_sim::robLocate>("robotLocation", 1);
@@ -182,12 +191,22 @@ ros::Subscriber simCom = n.subscribe("simulationCommand", 1000, simulationComman
 ros::Subscriber robotLocate = n.subscribe("robotLocation", 1000, robotLocator);
 ros::Subscriber objectLocate = n.subscribe("objectLocation", 1000, objectLocator);
 
-
+    while(startFlag==0) ros::spinOnce();
   while (ros::ok())
   {
+    ros::spinOnce();
     // Set the marker action.  Options are ADD and DELETE
     marker.action = visualization_msgs::Marker::ADD;
-
+        objMin=1.0;
+        curObj=null;
+        for(i=0;i<objLoc.size();i++)
+        {
+         objLoc[i].dist = sqrt(pow(marker.pose.position.x-objLoc[i].x,2) + pow(marker.pose.position.y-objLoc[i].y,2));
+         if(objLoc[i].dist<objMin)
+         {
+                curObj=objLoc[i];
+         }
+        }
     if(state==randWalk)
     {
         float randAngle = (rand() % 500);

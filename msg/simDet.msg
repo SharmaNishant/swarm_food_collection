@@ -1,0 +1,11 @@
+int16 numRobots
+float32 goalX
+float32 goalY
+float32 goalL
+float32 goalW
+float32 bounX
+float32 bounY
+float32 bounL
+float32 bounW
+int16 source
+int16 numObjects
