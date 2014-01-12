@@ -50,8 +50,9 @@ cout<<"press enter to start";
 cin>>ch;
 command.command=1;
 simCom.publish(command);
- /*while (ros::ok())
+ while (ros::ok())
  {
+     ros::spinOnce();
     ros::Duration(1).sleep();
- }*/
+ }
 }

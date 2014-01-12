@@ -190,7 +190,7 @@ ros::Subscriber simDet = n.subscribe("simulationDetails", 500, simulationDetails
 ros::Subscriber simCom = n.subscribe("simulationCommand", 1000, simulationCommand);
 ros::Subscriber robotLocate = n.subscribe("robotLocation", 1000, robotLocator);
 ros::Subscriber objectLocate = n.subscribe("objectLocation", 1000, objectLocator);
-
+    int i;
     while(startFlag==0) ros::spinOnce();
   while (ros::ok())
   {
@@ -198,14 +198,21 @@ ros::Subscriber objectLocate = n.subscribe("objectLocation", 1000, objectLocator
     // Set the marker action.  Options are ADD and DELETE
     marker.action = visualization_msgs::Marker::ADD;
         objMin=1.0;
-        curObj=null;
+        robMin=1.0;
+        curObj.id=-1;
+        curRob.id=-1;
         for(i=0;i<objLoc.size();i++)
         {
          objLoc[i].dist = sqrt(pow(marker.pose.position.x-objLoc[i].x,2) + pow(marker.pose.position.y-objLoc[i].y,2));
          if(objLoc[i].dist<objMin)
          {
                 curObj=objLoc[i];
+                objMin=objLoc[i].dist;
          }
+        }
+        for(i=0;i<roboLoc.size();i++)
+        {
+         roboLoc[i].dist = sqrt(pow(marker.pose.position.x-roboLoc[i].x,2) + pow(marker.pose.position.y-roboLoc[i].y,2));
         }
     if(state==randWalk)
     {
