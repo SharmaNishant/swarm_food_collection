@@ -1,3 +1,11 @@
+/******************************************************
+*    objects.cpp                                      *
+*    Purpose: Object simulation code for ROS and Rviz *
+*                                                     *
+*    @author Nishant Sharma                           *
+*    @version 0.3 14/01/14                            *
+******************************************************/
+
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
 #include <math.h>
@@ -10,6 +18,7 @@
 using namespace std;
 
   visualization_msgs::Marker nest, points;
+
 
 int startFlag=0,totRob,X,Y;
 
@@ -25,10 +34,10 @@ void node_init()
 {
     nest.header.frame_id = "/simulation";
     nest.header.stamp = ros::Time::now();
-    nest.ns = "task_part_sim";
+    nest.ns = "ObjectAndNest";
     nest.action = visualization_msgs::Marker::ADD;
     nest.pose.orientation.w = 1.0;
-    nest.id = 1001;
+    nest.id = 0;
     nest.type = visualization_msgs::Marker::CUBE;
     nest.scale.z = 0.05;
     nest.color.g = 1.0f;
@@ -40,10 +49,10 @@ void node_init()
 
     points.header.frame_id = "/simulation";
     points.header.stamp = ros::Time::now();
-    points.ns = "task_part_sim";
+    points.ns = "ObjectAndNest";
     points.action = visualization_msgs::Marker::ADD;
     points.pose.orientation.w = 1.0;
-    points.id = 1000;
+    points.id = 1;
     points.type = visualization_msgs::Marker::POINTS;
     // POINTS markers use x and y scale for width/height respectively
     points.scale.x = 0.2;
