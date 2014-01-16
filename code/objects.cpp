@@ -3,7 +3,7 @@
 *    Purpose: Object simulation code for ROS and Rviz *
 *                                                     *
 *    @author Nishant Sharma                           *
-*    @version 0.3 14/01/14                            *
+*    @version 0.4 16/01/14                            *
 ******************************************************/
 
 #include <ros/ros.h>
@@ -55,8 +55,8 @@ void node_init()
     points.id = 1;
     points.type = visualization_msgs::Marker::POINTS;
     // POINTS markers use x and y scale for width/height respectively
-    points.scale.x = 0.2;
-    points.scale.y = 0.2;
+    points.scale.x = 0.5;
+    points.scale.y = 0.5;
     // Points are green
     points.color.g = 1.0f;
     points.color.a = 1.0;
@@ -116,6 +116,7 @@ void robObject(const task_part_sim::robObj::ConstPtr& msg)
         objLoc[msg->id].x = msg->X;
         objLoc[msg->id].y = msg->Y;
     }
+    cout<<"Object Updated"<<msg->id<<" \n";
 }
 
 int main( int argc, char** argv )
@@ -142,7 +143,7 @@ int main( int argc, char** argv )
             p.x = objLocation.X=objLoc[i].x;
             p.y = objLocation.Y=objLoc[i].y;
             objLocate.publish(objLocation);
-            cout<<"Object" << i << "Published \n";
+            //cout<<"Object" << i << "Published \n";
             p.z=0;
             points.points.push_back(p);
 
