@@ -3,7 +3,7 @@
 *    Purpose: Object simulation code for ROS and Rviz *
 *                                                     *
 *    @author Nishant Sharma                           *
-*    @version 0.4 16/01/14                            *
+*    @version 1.0 19/01/14                            *
 ******************************************************/
 
 #include <ros/ros.h>
@@ -19,8 +19,10 @@ using namespace std;
 
   visualization_msgs::Marker nest, points;
 
+    ros::Publisher objLocate;// = n.advertise<task_part_sim::objLocate>("objectLocation", 10);
+    task_part_sim::objLocate objLocation;
 
-int startFlag=0,totRob,X,Y;
+int startFlag=0,totRob,X,Y,statObj;
 
 struct objectList{
 int id;
@@ -66,25 +68,17 @@ void node_init()
 void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
 {
     X=msg->goalX;
-    X+=((msg->numObjects - msg->numRobots)/2)*(-3);
+    X+=(msg->numObjects/2)*(-4);
     Y=msg->goalY+msg->source;
     totRob=msg->numRobots;
     int i;
-    for(i=0;i<msg->numRobots;i++)
-    {
-        tempObj.id=i;
-        tempObj.x=INT_MAX;
-        tempObj.y=INT_MAX;
-        objLoc.push_back(tempObj);
-    }
-
-    for(i=msg->numRobots;i<msg->numObjects;i++)
+    for(i=0;i<msg->numObjects;i++)
     {
         tempObj.id=i;
         tempObj.x=X;
         tempObj.y=Y;
         objLoc.push_back(tempObj);
-        X+=3;
+        X+=4;
     }
 
     nest.scale.x = msg->goalW;
@@ -111,23 +105,46 @@ void simulationCommand(const task_part_sim::simCom::ConstPtr& msg)
 
 void robObject(const task_part_sim::robObj::ConstPtr& msg)
 {
-    if(msg->id<totRob)
+    if(msg->flag==-1)
     {
-        objLoc[msg->id].x = msg->X;
-        objLoc[msg->id].y = msg->Y;
+        objLocation.id = msg->id;
+        objLocation.X = INT_MAX;
+        objLocation.Y = INT_MAX;
+        objLocation.flag = msg->flag;
+        objLocate.publish(objLocation);
+        objLoc.erase(objLoc.begin()+msg->id);
+        cout<<"Object Deleted"<<msg->id<<" \n";
     }
-    cout<<"Object Updated"<<msg->id<<" \n";
+    if(msg->flag==1)
+    {
+        tempObj.x = objLocation.X = msg->X;
+        tempObj.y = objLocation.Y = msg->Y;
+        objLocation.flag = msg->flag;
+        objLoc.push_back(tempObj);
+        objLocation.id = objLoc.back().id=objLoc.size()-1;
+        objLocate.publish(objLocation);
+        cout<<"Object Added"<<objLocation.id<<" \n";
+    }
+    if(msg->flag==0)
+    {
+        if(msg->id>=statObj)
+        {
+            objLoc[msg->id].x = msg->X;
+            objLoc[msg->id].y = msg->Y;
+            cout<<"Object Updated"<<msg->id<<" \n";
+        }
+    }
 }
 
 int main( int argc, char** argv )
 {
     ros::init(argc, argv, "objects");
-    ros::NodeHandle n;
+          ros::NodeHandle n;
     ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 10);
-    ros::Publisher objLocate = n.advertise<task_part_sim::objLocate>("objectLocation", 10);
+    objLocate = n.advertise<task_part_sim::objLocate>("objectLocation", 10);
     node_init();
     int i=0;
-    task_part_sim::objLocate objLocation;
+
     geometry_msgs::Point p;
     ros::Subscriber simDet = n.subscribe("simulationDetails", 5000, simulationDetails);
     ros::Subscriber simCom = n.subscribe("simulationCommand", 10, simulationCommand);
@@ -139,9 +156,10 @@ int main( int argc, char** argv )
         points.points.clear();
         for(i=0;i<objLoc.size();i++)
         {
-            objLocation.id=i;
+            objLocation.id = objLoc[i].id = i;
             p.x = objLocation.X=objLoc[i].x;
             p.y = objLocation.Y=objLoc[i].y;
+            objLocation.flag=0;
             objLocate.publish(objLocation);
             //cout<<"Object" << i << "Published \n";
             p.z=0;

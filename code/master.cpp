@@ -3,7 +3,7 @@
 *    Purpose: Master node for simulation on ROS and Rviz *
 *                                                        *
 *    @author Nishant Sharma                              *
-*    @version 0.3 14/01/14                               *
+*    @version 1.0 19/01/14                               *
 *********************************************************/
 
 #include <ros/ros.h>
@@ -34,9 +34,9 @@ ros::Subscriber taskPartLoger = n.subscribe("taskPartLog", 1000, taskPartLog);
 
 task_part_sim::simDet details;
 task_part_sim::simCom command;
-cout<<"Enter Boundary X, Y, Length, Width\n";
-cin>>details.bounX;
-cin>>details.bounY;
+cout<<"Enter Boundary Length, Width\n";
+details.bounX=0;
+details.bounY=0;
 cin>>details.bounL;
 cin>>details.bounW;
 
@@ -51,14 +51,15 @@ cin>>details.numRobots;
 
 cout<<"Enter No.of objects, distance from Nest\n";
 cin>>details.numObjects;
-details.numObjects+=details.numRobots;
+//details.numObjects+=details.numRobots;
 cin>>details.source;
 simDet.publish(details);
 ros::spinOnce();
 char ch;
-cout<<"press enter to start";
+cout<<"press Y to start";
 cin>>ch;
-command.command=1;
+if(ch=='Y' || ch=='y') command.command=1;
+else command.command=0;
 simCom.publish(command);
  while (ros::ok())
  {
@@ -70,6 +71,8 @@ simCom.publish(command);
         simCom.publish(command);
         exit(1);
      }
+     if(time%60==0)
+        cout<<time/60<<" minutes passed\n\n";
     ros::Duration(1).sleep();
  }
 }

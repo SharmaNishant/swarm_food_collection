@@ -4,7 +4,7 @@
 *             with levi's Walk instead of random walk *
 *                                                     *
 *    @author Nishant Sharma                           *
-*    @version 0.1 15/01/14                            *
+*    @version 0.2 19/01/14                            *
 ******************************************************/
 
 #include <ros/ros.h>
@@ -12,6 +12,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
 
 //including the custom msg files
 #include <task_part_sim/simCom.h>
@@ -29,11 +30,17 @@ using namespace std;
 #define toSource 3
 #define toObject 4
 
-float leviLength[20]={1,1.5,2,2.5,1,1.5,2,3,3.5,1,1.5,5,1,1.7,6,7,2,2.50,3,8};
-float leviFlag=0, leviTrav;
+//unique for each bot
+string rosName = "myLeviBots";
+int robotID=0;
+fstream file;
 
-int totObjectsDeposited=0, totRobots=0, bound_flag=0, robotID=0, state=randWalk, startFlag=0, obstFlag=0, toFlag=0;
-float X, Y, lastX, lastY, robotSpeed=0.001, direction, objMin, robMin, colDir, disToSource, nSLimit=2.0, robMinDist=2.0, robRepForce=3.0 ;
+float stepSize=10.0;
+
+int totObjectsDeposited=0, statObj=0, totRobots=0, bound_flag=0, state=randWalk, startFlag=0, obstFlag=0, toFlag=0, rwState=0;
+float X, Y, tempX, tempY, tempDist, lastX, lastY, robotSpeed=0.001, direction, objMin, robMin, colDir, disToSource, nSLimit=2.0, robMinDist=1.0, robRepForce=1.0 ;
+double secs;
+
 
 task_part_sim::robObj robObjct;
 task_part_sim::robLocate myLoc;
@@ -44,13 +51,16 @@ std_msgs::ColorRGBA blue,yellow,red;
 float lastSourceX,lastSourceY,sourceDirection,sdFlag=0,sourceDistance;
 
 //for randWalk
-float rwSTime,rwETime,rwTTime,rwAvgTime,randWalkCount=0;
+float rwTime,rwAvgTime,randWalkCount=0;
 
 //for neighSearch
 float centerX, centerY, nsFlag=0, nsTime=0;
 
 //for toNest
-float selLen=100,STime,ETime,TTime,disTrav;
+float selLen=100, TTime, disTrav, selCostID;
+
+//for Cost
+float lastTime, lastRwTime;
 
 //a structure to store the cost values respective of each length
 struct costFn{
@@ -108,6 +118,7 @@ float dist;
 //vector definition to make lists of objects and other robots
 vector<robotList> roboLoc;
 vector<objectList> objLoc;
+vector<costFn> myCF;
 
 //initialization of all the static part of the code
 void node_init()
@@ -166,9 +177,8 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
 {
     disToSource=msg->source;
     totRobots = msg->numRobots;
-
-
-//initializing the other robots
+    statObj = msg->numObjects;
+    //initializing the other robots
     int i;
     for(i=0;i<msg->numRobots;i++)
     {
@@ -179,7 +189,7 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
         roboLoc.push_back(tempRob);
     }
 
-//initializing the objects information
+    //initializing the objects information
     for(i=0;i<msg->numObjects;i++)
     {
         tempObj.id=i;
@@ -187,6 +197,16 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
         tempObj.y=INT_MAX;
         tempObj.dist=INT_MAX;
         objLoc.push_back(tempObj);
+    }
+
+    //initializing the cost Function
+    int totSteps=(disToSource/stepSize);
+    for(i=0;i<=totSteps;i++)
+    {
+        tempCost.id=i;
+        tempCost.length=(i+1)*stepSize;
+        tempCost.cost=0;
+        myCF.push_back(tempCost);
     }
 
     //setting boundary value
@@ -236,16 +256,32 @@ void robotLocator(const task_part_sim::robLocate::ConstPtr& msg)
 //function updating other object information based on the message received from object node
 void objectLocator(const task_part_sim::objLocate::ConstPtr& msg)
 {
-    objLoc[msg->id].x = msg->X;
-    objLoc[msg->id].y = msg->Y;
+    if(msg->flag==-1)
+    {
+        objLoc.erase(objLoc.begin()+msg->id);
+    }
+    if(msg->flag==1)
+    {
+        tempObj.x = INT_MAX;
+        tempObj.y = INT_MAX;
+        tempObj.dist = INT_MAX;
+        tempObj.id = msg->id;
+        objLoc.push_back(tempObj);
+    }
+    if(msg->flag==0)
+    {
+            objLoc[msg->id].x = msg->X;
+            objLoc[msg->id].y = msg->Y;
+    }
 }
 
 //main function
 int main( int argc, char** argv )
 {
+    file.open ("leviBot.txt", std::fstream::out | std::fstream::app);
     srand(time(0));
     node_init();
-    ros::init(argc, argv, "myRobots");
+    ros::init(argc, argv, rosName);
     ros::NodeHandle n;
 
     //setting the publisher for the nodes
@@ -255,7 +291,7 @@ int main( int argc, char** argv )
 
     marker.header.frame_id = "/simulation";
     marker.header.stamp = ros::Time::now();
-    marker.ns = "robots";
+    marker.ns = "leviBots";
     myLoc.id = marker.id = robotID;
 
     //setting the subscriber for the nodes
@@ -300,8 +336,8 @@ int main( int argc, char** argv )
     //position update for the random walk state
     if(state==randWalk)
     {
-        float randAngle = (rand() % 500);
-        float angleChange = (randAngle/100) - 2.0;
+        float randAngle = (rand() % 300);    //500
+        float angleChange = (randAngle/100) - 1.0;   //2.0
         //cout<<angleChange<<" rw\n";
         cout<<"Random Walk\n\n";
         direction += angleChange;
@@ -322,19 +358,39 @@ int main( int argc, char** argv )
             direction=atan2((curObj.y-marker.pose.position.y),(curObj.x-marker.pose.position.x));
             if(curObj.dist<=0.5)  //objMinDist
             {
-                lastSourceX = curObj.x;
-                lastSourceY = curObj.y;
-                if(curObj.id<totRobots)
+                lastTime=TTime;
+                lastRwTime=rwTime;
+                rwTime=0;
+                TTime=0;
+                float cost=INT_MAX;
+                tempX = lastSourceX = curObj.x;
+                tempY = lastSourceY = curObj.y;
+                if(curObj.id>=statObj)
                 {
                 robObjct.id = curObj.id;
                 robObjct.X = INT_MAX;
                 robObjct.Y = INT_MAX;
+                robObjct.flag = -1;
                 robObject.publish(robObjct);
                 }
                 state=toNest;
+                for(i=0;i<myCF.size();i++)
+                {
+                    if(cost>myCF[i].cost)
+                    selLen=myCF[i].length;
+                    selCostID=i;
+                    cost=myCF[i].cost;
+                }
+                if(startFlag==1)
+                {
+                    startFlag=0;
+                    selCostID=myCF.size()-1;
+                    selLen=INT_MAX;
+                }
                 toFlag=0;
                 disTrav=0;
                 ros::Duration(0.5).sleep();
+                TTime+=0.5;
                 continue;
             }
         }
@@ -352,16 +408,19 @@ int main( int argc, char** argv )
     {
         cout<<"Going towards the Nest\n\n";
         direction = atan2((nest.y-marker.pose.position.y),(nest.x-marker.pose.position.x));
-       /* if(disTrav>=selLen)
+        if(disTrav>=selLen)
         {
-            robObjct.id = curObj.id;
-            robObjct.X = marker.pose.position.x;
-            robObjct.Y = marker.pose.position.y;
+            robObjct.id = robotID;
+            myCF[selCostID].cost= (0.75 * myCF[selCostID].cost) + (0.25*((disToSource/myCF[selCostID].length) * (TTime) + rwTime));
+            tempX = robObjct.X = marker.pose.position.x;
+            tempY = robObjct.Y = marker.pose.position.y;
+            robObjct.flag=1;
             robObject.publish(robObjct);
             state=toSource;
             disTrav=0;
+            sdFlag=0;
             continue;
-        }*/
+        }
 
         //(0<AM⋅AB<AB⋅AB)∧(0<AM⋅AD<AD⋅AD)
         nest.dv1m2 = ((-nest.x1+marker.pose.position.x)*(-nest.x1+nest.x2))+((-nest.y1+marker.pose.position.y)*(-nest.y1+nest.y2));
@@ -370,16 +429,20 @@ int main( int argc, char** argv )
         //test if the robot has entered the nest
         if((0 < nest.dv1m2) && (nest.dv1m2 < nest.dv12) && (0 < nest.dv1m3) && (nest.dv1m3 < nest.dv13))
         {
-            robObjct.id = curObj.id;
-            robObjct.X = INT_MAX;
-            robObjct.Y = INT_MAX;
-            robObject.publish(robObjct);
+            tempX = marker.pose.position.x;
+            tempY = marker.pose.position.y;
             state=toSource;
             disTrav=0;
             sdFlag=0;
+            file<<"Object Deposited\n";
+            myCF[selCostID].cost= (0.75 * myCF[selCostID].cost) + (0.25*((disToSource/myCF[selCostID].length) * (lastTime) + lastRwTime));
+            cout<<selCostID<<"  "<<myCF[selCostID].cost<<"\n";
+            /*TTime=0;
+            rwTime=0;*/
         }
         marker.color=blue;
-        disTrav+=robotSpeed;
+        //disTrav+=robotSpeed;
+        disTrav=sqrt(pow(lastSourceX-marker.pose.position.x,2) + pow(lastSourceY-marker.pose.position.y,2));
         //cout<<"to nest data \n"<<nest.dv1m2<<"  "<<nest.dv12<<"  "<<nest.dv1m3<<"  "<<nest.dv13<<"\n\n  ";
     }
 
@@ -392,14 +455,14 @@ int main( int argc, char** argv )
             sdFlag=1;
             sourceDirection = atan2((lastSourceY-marker.pose.position.y),(lastSourceX-marker.pose.position.x));
             sourceDistance = sqrt(pow(lastSourceX-marker.pose.position.x,2) + pow(lastSourceY-marker.pose.position.y,2));
-            //cout<<sourceDistance<<"is the source distance";
+            cout<<sourceDistance<<"is the source distance";
             ros::Duration(0.5).sleep();
-            lastSourceX= marker.pose.position.x;
-            lastSourceY= marker.pose.position.y;
+            //lastSourceX= marker.pose.position.x;
+            //lastSourceY= marker.pose.position.y;
         }
         sourceDirection+=0.0005;
         //sourceDistance-=robotSpeed;
-        //cout<<"dis travel"<<disTrav<<"\n";
+        cout<<"dis travel"<<disTrav<<"\n";
         if(disTrav>sourceDistance)
         {
             nsFlag=0;
@@ -408,7 +471,7 @@ int main( int argc, char** argv )
             continue;
         }
         marker.color=yellow;
-        disTrav=sqrt(pow(lastSourceX-marker.pose.position.x,2) + pow(lastSourceY-marker.pose.position.y,2));;
+        disTrav=sqrt(pow(tempX-marker.pose.position.x,2) + pow(tempY-marker.pose.position.y,2));
     }
 
     //position update while Searching the neighbourhood of the predict Source Location
@@ -456,6 +519,7 @@ int main( int argc, char** argv )
                     colDir= atan2((marker.pose.position.y-roboLoc[i].y),(marker.pose.position.x-roboLoc[i].x));
                     X+= (robRepForce-roboLoc[i].dist)+cos(colDir);
                     Y+= (robRepForce-roboLoc[i].dist)+sin(colDir);
+                    ros::Duration(0.2).sleep();
             }
         }
 
@@ -464,20 +528,21 @@ int main( int argc, char** argv )
 
             myLoc.X = marker.pose.position.x += robotSpeed+cos(direction) + X;
             myLoc.Y = marker.pose.position.y += robotSpeed+sin(direction) + Y;
-
+            rwTime+=0.2;
 
         }
         if(state==toSource)
         {
             myLoc.X = marker.pose.position.x += robotSpeed+cos(sourceDirection) + X;
             myLoc.Y = marker.pose.position.y += robotSpeed+sin(sourceDirection) + Y;
+            TTime+=0.2;
 
         }
         if(state==toObject)
         {
             myLoc.X = marker.pose.position.x += robotSpeed+cos(direction) + X;
             myLoc.Y = marker.pose.position.y += robotSpeed+sin(direction) + Y;
-
+            TTime+=0.2;
         }
         if(state==neighSearch)
         {
@@ -489,12 +554,13 @@ int main( int argc, char** argv )
                 marker.pose.position.y = lastY;
                 continue;
             }
-
+            TTime+=0.2;
         }
         if(state==toNest)
         {
             myLoc.X = marker.pose.position.x += robotSpeed+cos(direction) + X;
             myLoc.Y = marker.pose.position.y += robotSpeed+sin(direction) + Y;
+            TTime+=0.2;
         }
 
         boundary.dv1m3 = ((marker.pose.position.x-boundary.x1)*(boundary.x3-boundary.x1))+((marker.pose.position.y-boundary.y1)*(boundary.y3-boundary.y1));
@@ -507,6 +573,7 @@ int main( int argc, char** argv )
             marker.pose.position.x = lastX+(robotSpeed+cos(direction));
             marker.pose.position.y = lastY+(robotSpeed+sin(direction));
             ros::Duration(0.5).sleep();
+            rwTime+=0.5;
             cout<<"out of boundary";
             //continue;
         }
@@ -516,5 +583,10 @@ int main( int argc, char** argv )
     rviz.publish(marker);
     myLocate.publish(myLoc);
     ros::Duration(0.2).sleep();
+    secs =ros::Time::now().toSec();
+    file<<"Time :"<<secs<<" | POS x : "<<myLoc.X<<" | POS y : "<<myLoc.Y<<" | State : "<<state<<" |\n";
+    file.flush();
     }
 }
+
+/*The End*/
