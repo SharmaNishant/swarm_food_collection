@@ -1,10 +1,11 @@
-/*****************************************************
-*    robot.cpp                                       *
-*    Purpose: Robot simulation code for ROS and Rviz *
-*                                                    *
-*    @author Nishant Sharma                          *
-*    @version 1.0 19/01/14                           *
-*****************************************************/
+/******************************************************
+*    leviBot.cpp                                      *
+*    Purpose: Robot simulation code for ROS and Rviz  *
+*             with levi's Walk instead of random walk *
+*                                                     *
+*    @author Nishant Sharma                           *
+*    @version 0.2 19/01/14                            *
+******************************************************/
 
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
@@ -28,18 +29,20 @@ using namespace std;
 #define toNest 2
 #define toSource 3
 #define toObject 4
+#define leviSearch 5
 
 //unique for each bot
-string rosName = "myRobots";
+string rosName = "myLeviBots";
 int robotID=0;
 fstream file;
 
 float stepSize=10.0;
 
-int totObjectsDeposited=0, statObj=0, totRobots=0, bound_flag=0, state=randWalk, startFlag=0, obstFlag=0, toFlag=0;
+int totObjectsDeposited=0, statObj=0, totRobots=0, bound_flag=0, state=randWalk, startFlag=0, obstFlag=0, toFlag=0, rwFlag=0;
 float X, Y, tempX, tempY, tempDist, lastX, lastY, robotSpeed=0.001, direction, objMin, robMin, colDir, disToSource, nSLimit=2.0, robMinDist=1.0, robRepForce=1.0 ;
 double secs;
 
+float leviDist, leviX, leviY,leviDir, leviFlag=0;
 
 task_part_sim::robObj robObjct;
 task_part_sim::robLocate myLoc;
@@ -277,7 +280,7 @@ void objectLocator(const task_part_sim::objLocate::ConstPtr& msg)
 //main function
 int main( int argc, char** argv )
 {
-    file.open ("robot.txt", std::fstream::out | std::fstream::app);
+    file.open ("leviBot.txt", std::fstream::out | std::fstream::app);
     srand(time(0));
     node_init();
     ros::init(argc, argv, rosName);
@@ -290,7 +293,7 @@ int main( int argc, char** argv )
 
     marker.header.frame_id = "/simulation";
     marker.header.stamp = ros::Time::now();
-    marker.ns = "robots";
+    marker.ns = "leviBots";
     myLoc.id = marker.id = robotID;
 
     //setting the subscriber for the nodes
@@ -335,17 +338,55 @@ int main( int argc, char** argv )
     //position update for the random walk state
     if(state==randWalk)
     {
-        float randAngle = (rand() % 300);    //500
-        float angleChange = (randAngle/100) - 1.0;   //2.0
+        if(leviFlag==0)
+        {
+            leviX = (rand()%50)-25;
+            leviY = (rand()%50)-25;
+            leviDir=atan2((leviY-marker.pose.position.y),(leviX-marker.pose.position.x));
+            leviFlag=1;
+            //eviDist=sqrt(pow(leviX-marker.pose.position.x,2) + pow(leviY-marker.pose.position.y,2));
+        }
+        disTrav=sqrt(pow(leviX-marker.pose.position.x,2) + pow(leviY-marker.pose.position.y,2));
+        if(rwFlag==1 || disTrav<1.5)
+        {
+            state=leviSearch;
+            rwFlag=0;
+            nsFlag=0;
+            disTrav=0;
+        }
         //cout<<angleChange<<" rw\n";
         cout<<"Random Walk\n\n";
-        direction += angleChange;
+        direction = leviDir;
         marker.color=red;
+    }
+
+    if(state==leviSearch)
+    {
+        cout<<"Searching the neighbourhood\n";
+        if(nsFlag==0)
+        {
+            leviX=marker.pose.position.x;
+            leviY=marker.pose.position.y;
+            nsFlag=1;
+            nsTime=0;
+        }
+        float randAngle = (rand() % 500);
+        float angleChange = (randAngle/100) - 2.0;
+        //cout<<angleChange<<" ns \n";
+        if(nsTime>30)  //nsTime max value
+        {
+            nsFlag=0;
+            leviFlag=0;
+            state=randWalk;
+        }
         if(curObj.id!=-1)
         {
+            nsFlag=0;
             state=toObject;
-            continue;
         }
+        nsTime++;
+        direction += angleChange;
+        marker.color=red;
     }
 
     //position update when the robot is moving towards the object
@@ -374,13 +415,12 @@ int main( int argc, char** argv )
                 robObject.publish(robObjct);
                 }
                 state=toNest;
-                cost=INT_MAX;
                 for(i=0;i<myCF.size();i++)
                 {
                     if(cost>myCF[i].cost)
-                    {selLen=myCF[i].length;
+                    selLen=myCF[i].length;
                     selCostID=i;
-                    cost=myCF[i].cost;}
+                    cost=myCF[i].cost;
                 }
                 if(startFlag==1)
                 {
@@ -412,7 +452,7 @@ int main( int argc, char** argv )
         if(disTrav>=selLen)
         {
             robObjct.id = robotID;
-
+           // myCF[selCostID].cost= (0.75 * myCF[selCostID].cost) + (0.25*((disToSource/myCF[selCostID].length) * (TTime) + rwTime));
             tempX = robObjct.X = marker.pose.position.x;
             tempY = robObjct.Y = marker.pose.position.y;
             robObjct.flag=1;
@@ -437,7 +477,7 @@ int main( int argc, char** argv )
             sdFlag=0;
             file<<"Object Deposited\n";
             //myCF[selCostID].cost= (0.75 * myCF[selCostID].cost) + (0.25*((disToSource/myCF[selCostID].length) * (lastTime) + lastRwTime));
-           // cout<<selCostID<<"  "<<myCF[selCostID].cost<<"\n";
+            cout<<selCostID<<"  "<<myCF[selCostID].cost<<"\n";
             /*TTime=0;
             rwTime=0;*/
         }
@@ -545,6 +585,18 @@ int main( int argc, char** argv )
             myLoc.Y = marker.pose.position.y += robotSpeed+sin(direction) + Y;
             TTime+=0.2;
         }
+        if(state == leviSearch)
+        {
+            myLoc.X = marker.pose.position.x += robotSpeed+cos(direction) + X;
+            myLoc.Y = marker.pose.position.y += robotSpeed+sin(direction) + Y;
+            if((sqrt(pow(leviX-marker.pose.position.x,2) + pow(leviY-marker.pose.position.y,2))) > 4.0 )
+            {
+                marker.pose.position.x = lastX;
+                marker.pose.position.y = lastY;
+                continue;
+            }
+            TTime+=0.2;
+        }
         if(state==neighSearch)
         {
             myLoc.X = marker.pose.position.x += robotSpeed+cos(direction) + X;
@@ -577,6 +629,10 @@ int main( int argc, char** argv )
             rwTime+=0.5;
             cout<<"out of boundary";
             //continue;
+            if(state==randWalk)
+            {
+                rwFlag=1;
+            }
         }
     }
     cout<<myLoc.X<<"  " << myLoc.Y<<"\n"<<"\n";

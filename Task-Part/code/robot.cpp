@@ -1,14 +1,16 @@
-/******************************************************
-*    leviBot.cpp                                      *
-*    Purpose: Robot simulation code for ROS and Rviz  *
-*             with levi's Walk instead of random walk *
-*                                                     *
-*    @author Nishant Sharma                           *
-*    @version 0.2 19/01/14                            *
-******************************************************/
+/*****************************************************
+*    robot.cpp                                       *
+*    Purpose: Robot simulation code for ROS and Rviz *
+*                                                    *
+*    @author Nishant Sharma                          *
+*    @version 1.1 10/02/14                           *
+*****************************************************/
 
+//Including RosC++ Header Files
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
+
+//Including C++ Header Files
 #include <math.h>
 #include <stdlib.h>
 #include <iostream>
@@ -24,20 +26,22 @@
 
 using namespace std;
 
+//Defining Total States for a Robot
 #define neighSearch 0
 #define randWalk 1
 #define toNest 2
 #define toSource 3
 #define toObject 4
 
-//unique for each bot
-string rosName = "myLeviBots";
+//unique for each robot
+string rosName = "myRobots";
 int robotID=0;
+
 fstream file;
 
 float stepSize=10.0;
 
-int totObjectsDeposited=0, statObj=0, totRobots=0, bound_flag=0, state=randWalk, startFlag=0, obstFlag=0, toFlag=0, rwState=0;
+int totObjectsDeposited=0,toObjFlag=0, statObj=0, totRobots=0, bound_flag=0, state=randWalk, startFlag=0, obstFlag=0, toFlag=0;
 float X, Y, tempX, tempY, tempDist, lastX, lastY, robotSpeed=0.001, direction, objMin, robMin, colDir, disToSource, nSLimit=2.0, robMinDist=1.0, robRepForce=1.0 ;
 double secs;
 
@@ -256,29 +260,33 @@ void robotLocator(const task_part_sim::robLocate::ConstPtr& msg)
 //function updating other object information based on the message received from object node
 void objectLocator(const task_part_sim::objLocate::ConstPtr& msg)
 {
-    if(msg->flag==-1)
+    if(curObj.id==-1)
     {
-        objLoc.erase(objLoc.begin()+msg->id);
+        tempObj.id=msg->id;
+        tempObj.x=msg->X;
+        tempObj.y=msg->Y;
+        tempObj.dist=sqrt(pow(marker.pose.position.x-tempObj.x,2) + pow(marker.pose.position.y-tempObj.y,2));
+        if(tempObj.dist<2.0)
+        {
+            curObj=tempObj;
+        }
     }
-    if(msg->flag==1)
+    else
     {
-        tempObj.x = INT_MAX;
-        tempObj.y = INT_MAX;
-        tempObj.dist = INT_MAX;
-        tempObj.id = msg->id;
-        objLoc.push_back(tempObj);
-    }
-    if(msg->flag==0)
-    {
-            objLoc[msg->id].x = msg->X;
-            objLoc[msg->id].y = msg->Y;
+        tempObj.id=msg->id;
+        tempObj.x=msg->X;
+        tempObj.y=msg->Y;
+        tempObj.dist=sqrt(pow(marker.pose.position.x-tempObj.x,2) + pow(marker.pose.position.y-tempObj.y,2));
+        if(tempObj.dist<curObj.dist)
+            curObj=tempObj;
     }
 }
 
 //main function
 int main( int argc, char** argv )
 {
-    file.open ("leviBot.txt", std::fstream::out | std::fstream::app);
+    curObj.id=-1;
+    file.open ("robot.txt", std::fstream::out | std::fstream::app);
     srand(time(0));
     node_init();
     ros::init(argc, argv, rosName);
@@ -291,7 +299,7 @@ int main( int argc, char** argv )
 
     marker.header.frame_id = "/simulation";
     marker.header.stamp = ros::Time::now();
-    marker.ns = "leviBots";
+    marker.ns = "robots";
     myLoc.id = marker.id = robotID;
 
     //setting the subscriber for the nodes
@@ -312,11 +320,11 @@ int main( int argc, char** argv )
     obstFlag=0;
     objMin=1.0;
     robMin=1.0;
-    curObj.id=-1;
+    //curObj.id=-1;
     curRob.id=-1;
 
     //distance from object
-    for(i=0;i<objLoc.size();i++)
+    /*for(i=0;i<objLoc.size();i++)
     {
         objLoc[i].dist = sqrt(pow(marker.pose.position.x-objLoc[i].x,2) + pow(marker.pose.position.y-objLoc[i].y,2));
         if(objLoc[i].dist<objMin)
@@ -324,7 +332,7 @@ int main( int argc, char** argv )
             curObj=objLoc[i];
             objMin=objLoc[i].dist;
         }
-    }
+    }*/
 
     //distance from other robots
     for(i=0;i<roboLoc.size();i++)
@@ -344,6 +352,7 @@ int main( int argc, char** argv )
         marker.color=red;
         if(curObj.id!=-1)
         {
+            toObjFlag=0;
             state=toObject;
             continue;
         }
@@ -352,12 +361,18 @@ int main( int argc, char** argv )
     //position update when the robot is moving towards the object
     if(state==toObject)
     {
+        if(toObjFlag>15)
+        {
+            state=randWalk;
+        }
+        toObjFlag++;
         cout<<"Going towards the Object\n\n";
         if(curObj.id!=-1)
         {
             direction=atan2((curObj.y-marker.pose.position.y),(curObj.x-marker.pose.position.x));
             if(curObj.dist<=0.5)  //objMinDist
             {
+                myCF[selCostID].cost= (0.75 * myCF[selCostID].cost) + (0.25*((disToSource/myCF[selCostID].length) * (TTime) + rwTime));
                 lastTime=TTime;
                 lastRwTime=rwTime;
                 rwTime=0;
@@ -365,7 +380,6 @@ int main( int argc, char** argv )
                 float cost=INT_MAX;
                 tempX = lastSourceX = curObj.x;
                 tempY = lastSourceY = curObj.y;
-                if(curObj.id>=statObj)
                 {
                 robObjct.id = curObj.id;
                 robObjct.X = INT_MAX;
@@ -374,12 +388,13 @@ int main( int argc, char** argv )
                 robObject.publish(robObjct);
                 }
                 state=toNest;
+                cost=INT_MAX;
                 for(i=0;i<myCF.size();i++)
                 {
                     if(cost>myCF[i].cost)
-                    selLen=myCF[i].length;
+                    {selLen=myCF[i].length;
                     selCostID=i;
-                    cost=myCF[i].cost;
+                    cost=myCF[i].cost;}
                 }
                 if(startFlag==1)
                 {
@@ -411,17 +426,17 @@ int main( int argc, char** argv )
         if(disTrav>=selLen)
         {
             robObjct.id = robotID;
-            myCF[selCostID].cost= (0.75 * myCF[selCostID].cost) + (0.25*((disToSource/myCF[selCostID].length) * (TTime) + rwTime));
+
             tempX = robObjct.X = marker.pose.position.x;
             tempY = robObjct.Y = marker.pose.position.y;
             robObjct.flag=1;
             robObject.publish(robObjct);
             state=toSource;
+            curObj.id=-1;
             disTrav=0;
             sdFlag=0;
             continue;
         }
-
         //(0<AM⋅AB<AB⋅AB)∧(0<AM⋅AD<AD⋅AD)
         nest.dv1m2 = ((-nest.x1+marker.pose.position.x)*(-nest.x1+nest.x2))+((-nest.y1+marker.pose.position.y)*(-nest.y1+nest.y2));
         nest.dv1m3 = ((-nest.x1+marker.pose.position.x)*(-nest.x1+nest.x3))+((-nest.y1+marker.pose.position.y)*(-nest.y1+nest.y3));
@@ -432,11 +447,12 @@ int main( int argc, char** argv )
             tempX = marker.pose.position.x;
             tempY = marker.pose.position.y;
             state=toSource;
+            curObj.id=-1;
             disTrav=0;
             sdFlag=0;
             file<<"Object Deposited\n";
-            myCF[selCostID].cost= (0.75 * myCF[selCostID].cost) + (0.25*((disToSource/myCF[selCostID].length) * (lastTime) + lastRwTime));
-            cout<<selCostID<<"  "<<myCF[selCostID].cost<<"\n";
+            //myCF[selCostID].cost= (0.75 * myCF[selCostID].cost) + (0.25*((disToSource/myCF[selCostID].length) * (lastTime) + lastRwTime));
+           // cout<<selCostID<<"  "<<myCF[selCostID].cost<<"\n";
             /*TTime=0;
             rwTime=0;*/
         }
@@ -496,6 +512,7 @@ int main( int argc, char** argv )
         if(curObj.id!=-1)
         {
             nsFlag=0;
+            toObjFlag=0;
             state=toObject;
         }
         nsTime++;
