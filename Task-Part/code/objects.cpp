@@ -31,7 +31,7 @@ task_part_sim::objLocate objectLocation;
 
 
 int startFlag=0;  //For the master to set start flag to 1
-int X,Y;  //temp X,Y used
+int X,Y,i;  //temp X,Y used
 int numStaticObject;
 
 //Structure for storing object locations
@@ -93,8 +93,6 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
     X+=(numStaticObject/2)*(-4);
     Y=msg->goalY+msg->source;
 
-    int i;
-
     //Initializing Static object List not to be changed during simulation
     for(i=0;i<numStaticObject;i++)
     {
@@ -139,7 +137,7 @@ void robObject(const task_part_sim::robObj::ConstPtr& msg)
             if(objectLocationList[i].x==msg->X && objectLocationList[i].y==msg->Y)
             {
                 objectLocationList.erase(objectLocationList.begin()+i);
-                cout<<"Object Deleted"<<i<<" \n";
+                cout<<"Object Deleted : "<<i<<" \n";
                 cout<<"TOTAL : "<<objectLocationList.size()<<" \n\n";
                 break;
             }
@@ -152,7 +150,7 @@ void robObject(const task_part_sim::robObj::ConstPtr& msg)
         tempObject.x = msg->X;
         tempObject.y = msg->Y;
         objectLocationList.push_back(tempObject);
-        cout<<"Object Added"<<objectLocation.id<<" \n";
+        cout<<"Object Added : "<<objectLocation.id<<" \n";
         cout<<"TOTAL : "<<objectLocationList.size()<<" \n\n";
     }
 }
