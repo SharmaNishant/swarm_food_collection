@@ -1,9 +1,9 @@
 /*****************************************************
-*    robot.cpp                                       *
+*    mainBot.cpp                                     *
 *    Purpose: Robot simulation code for ROS and Rviz *
 *                                                    *
 *    @author Nishant Sharma                          *
-*    @version 1.1 10/02/14                           *
+*    @version 0.5 13/02/14                           *
 *****************************************************/
 
 //Including RosC++ Header Files
