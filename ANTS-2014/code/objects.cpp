@@ -256,6 +256,7 @@ int main( int argc, char** argv )
             p.z = 0;
             objectLocation.value = foodValue1;
             objectLocation.flag = 0;
+            objectLocation.patch = 0;
             objLocate.publish(objectLocation);
             points.points.push_back(p);
         }
@@ -268,6 +269,7 @@ int main( int argc, char** argv )
             objectLocation.value = foodValue2;
             p.z = 0;
             objectLocation.flag = 0;
+            objectLocation.patch = 1;
             objLocate.publish(objectLocation);
             points.points.push_back(p);
         }

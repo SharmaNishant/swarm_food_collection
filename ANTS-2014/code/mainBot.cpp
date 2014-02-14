@@ -17,12 +17,12 @@
 #include <fstream>
 
 //including the custom msg files
-#include <task_part_sim/simCom.h>
-#include <task_part_sim/simDet.h>
-#include <task_part_sim/robLocate.h>
-#include <task_part_sim/objLocate.h>
-#include <task_part_sim/robObj.h>
-#include <task_part_sim/logInfo.h>
+#include <ants2014/simCom.h>
+#include <ants2014/simDet.h>
+#include <ants2014/robLocate.h>
+#include <ants2014/objLocate.h>
+#include <ants2014/robObj.h>
+#include <ants2014/logInfo.h>
 
 using namespace std;
 
@@ -34,7 +34,7 @@ using namespace std;
 #define toObject 4
 
 //unique for each robot
-string rosName = "myRobots";
+string rosName = "robot";
 int robotID=0;
 
 char filename[] = "robot1.txt";
@@ -52,12 +52,18 @@ float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.001, robotD
 
 float colisionAvoidDirection, distanceToSource, neighbourSearchLimit = 2.0, robotMinimumDistance = 1.0, robotRepulsionForce = 1.0;
 
+int selectedPatch = -1;
+
 long secs;
 
 double robotX,robotY;
 
-task_part_sim::robObj       robotObject;
-task_part_sim::robLocate    thisRobotLocation;
+//double estimatePatch1X = 100 , estimatePatch1Y = 100, estimatePatch2X = 100, estimatePatch2Y = 100;
+
+//double survialPatch1 = 0.2, survialPatch2 = 0.8;
+
+ants2014::robObj       robotObject;
+ants2014::robLocate    thisRobotLocation;
 visualization_msgs::Marker  robotRvizMarker;
 std_msgs::ColorRGBA         blue,yellow,red;
 
@@ -74,14 +80,22 @@ float neighbourSearchCenterX, neighbourSearchCenterY, neighbourSearchFlag = 0, n
 float selectedLength = 100, totalTime, distanceTravelled, selectedCostID;
 
 //for Cost
-float lastStepTime, lastRandomWalkTime;
+//float lastStepTime, lastRandomWalkTime;
 
 //a structure to store the cost values respective of each length
-struct costFunction{
+/*struct costFunction{
 int id;
 float length;
 float cost;
-}tempCost;
+}tempCost;*/
+
+struct patchFunction{
+int id;
+int object;
+double estimateX, estimateY;
+double survial;
+float cost;
+}tempPatch;
 
 //structure to store the boundary details
 struct boundaryDetails{
@@ -118,6 +132,8 @@ struct objectList{
 int id;
 float x;
 float y;
+int value;
+int patch;
 float dist;
 }tempObj, curObj;
 
@@ -131,7 +147,8 @@ float dist;
 
 //vector definition to make lists of objects and other robots
 vector<robotList> robotLocationList;
-vector<costFunction> costFunction;
+//vector<costFunction> costFunction;
+vector<patchFunction> patchFunctionList;
 
 //initialization of all the static part of the code
 void node_init()
@@ -173,7 +190,7 @@ void node_init()
 }
 
 //function to start or stop the code based on the message received from the master node
-void simulationCommand(const task_part_sim::simCom::ConstPtr& msg)
+void simulationCommand(const ants2014::simCom::ConstPtr& msg)
 {
     if(msg->command == 0)
     {
@@ -186,7 +203,7 @@ void simulationCommand(const task_part_sim::simCom::ConstPtr& msg)
 }
 
 //function to set the simulation details based on the message received from the master node
-void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
+void simulationDetails(const ants2014::simDet::ConstPtr& msg)
 {
     distanceToSource = msg->source;
 
@@ -202,7 +219,7 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
     }
 
     //initializing the cost Function
-    int totalSteps = (distanceToSource/stepSize);
+   /* int totalSteps = (distanceToSource/stepSize);
 
     for(i = 0;i <= totalSteps; i++)
     {
@@ -210,7 +227,23 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
         tempCost.length = (i+1) * stepSize;
         tempCost.cost = 0;
         costFunction.push_back(tempCost);
-    }
+    }*/
+
+    tempPatch.id = 0;
+    tempPatch.object = 0;
+    tempPatch.cost = 0;
+    tempPatch.estimateX = -15;
+    tempPatch.estimateY = 15;
+    tempPatch.survial = 0.8;
+    patchFunctionList.push_back(tempPatch);
+
+    tempPatch.id = 1;
+    tempPatch.object = 0;
+    tempPatch.cost = 0;
+    tempPatch.estimateX = 15;
+    tempPatch.estimateY = 15;
+    tempPatch.survial = 0.2;
+    patchFunctionList.push_back(tempPatch);
 
     //setting boundary value
     {
@@ -250,20 +283,22 @@ void simulationDetails(const task_part_sim::simDet::ConstPtr& msg)
 }
 
 //function updating other robot locations based on the message received from other robots
-void robotLocator(const task_part_sim::robLocate::ConstPtr& msg)
+void robotLocator(const ants2014::robLocate::ConstPtr& msg)
 {
     robotLocationList[msg->id].x = msg->X;
     robotLocationList[msg->id].y = msg->Y;
 }
 
 //function updating other object information based on the message received from object node
-void objectLocator(const task_part_sim::objLocate::ConstPtr& msg)
+void objectLocator(const ants2014::objLocate::ConstPtr& msg)
 {
     if(curObj.id == -1)
     {
         tempObj.id = msg->id;
         tempObj.x = msg->X;
         tempObj.y = msg->Y;
+        tempObj.value = msg->value;
+        tempObj.patch = msg->patch;
         tempObj.dist = sqrt(pow(robotX - tempObj.x,2) + pow(robotY - tempObj.y,2));
         if(tempObj.dist < 2.0)
         {
@@ -290,7 +325,7 @@ int main( int argc, char** argv )
     curObj.id = -1;
 
     //log file
-    file.open (filename, std::fstream::out | std::fstream::app);
+    file.open (filename, std::fstream::out);// | std::fstream::app);
 
     //for random values
     srand(time(0));
@@ -302,8 +337,8 @@ int main( int argc, char** argv )
 
     //setting the publisher for the nodes
     ros::Publisher rviz = n.advertise<visualization_msgs::Marker>("visualization_marker", 10);
-    ros::Publisher myLocate = n.advertise<task_part_sim::robLocate>("robotLocation", 10);
-    ros::Publisher robObject = n.advertise<task_part_sim::robObj>("robObject", 10);
+    ros::Publisher myLocate = n.advertise<ants2014::robLocate>("robotLocation", 10);
+    ros::Publisher robObject = n.advertise<ants2014::robObj>("robObject", 10);
 
     robotRvizMarker.header.frame_id = "/simulation";
     robotRvizMarker.header.stamp = ros::Time::now();
@@ -386,11 +421,11 @@ int main( int argc, char** argv )
                 if(curObj.dist <= 2.0)  //objMinDist
                 {
                     //updating cost function
-                    costFunction[selectedCostID].cost = (0.75 * costFunction[selectedCostID].cost) + (0.25 * ((distanceToSource/costFunction[selectedCostID].length) * (totalTime) + randomWalkTime));
+                  /*  costFunction[selectedCostID].cost = (0.75 * costFunction[selectedCostID].cost) + (0.25 * ((distanceToSource/costFunction[selectedCostID].length) * (totalTime) + randomWalkTime));
                     lastStepTime = totalTime;
                     lastRandomWalkTime = randomWalkTime;
                     randomWalkTime = 0;
-                    totalTime = 0;
+                    totalTime = 0; */
                     float cost = INT_MAX;
 
                     tempX = lastSourceX = curObj.x;
@@ -407,7 +442,7 @@ int main( int argc, char** argv )
 
                     state = toNest;
                     cout<<"State Changed : towards Nest\n\n";
-
+/*
                     //selecting new cost
                     cost = INT_MAX;
                     for(i = 0;i < costFunction.size(); i++)
@@ -427,7 +462,9 @@ int main( int argc, char** argv )
                         selectedCostID = costFunction.size()-1;
                         selectedLength = 0;
                     }
-                    cout<<"Selected Cost Length is " << selectedLength<<" \n";
+                    */
+                    //cout<<"Selected Cost Length is " << selectedLength<<" \n";
+
                     distanceTravelled = 0;
 
                     ros::Duration(0.5).sleep();
@@ -454,7 +491,7 @@ int main( int argc, char** argv )
             robotDirection = atan2((nest.y - robotY),(nest.x - robotX));
 
             //if selected cost length is travelled
-            if(distanceTravelled >= selectedLength)
+           /* if(distanceTravelled >= selectedLength)
             {
                 //sending msg to add object
                 robotObject.id = robotID;
@@ -471,7 +508,7 @@ int main( int argc, char** argv )
                 distanceTravelled = 0;
                 sourceDetailSaveFlag = 0;
                 continue;
-            }
+            }*/
 
             //checking if robot is in the nest or not
             //(0<AM⋅AB<AB⋅AB)∧(0<AM⋅AD<AD⋅AD)
@@ -484,9 +521,53 @@ int main( int argc, char** argv )
                 //saving depositing point value
                 tempX = robotX;
                 tempY = robotY;
+                if(curObj.patch == 0)
+                    patchFunctionList[0].cost = (0.75 * patchFunctionList[0].cost) + (0.25 * (( (totalTime) / (curObj.value * patchFunctionList[0].survial)) + randomWalkTime));
+                else
+                    patchFunctionList[1].cost = (0.75 * patchFunctionList[1].cost) + (0.25 * (( (totalTime) / (curObj.value * patchFunctionList[1].survial)) + randomWalkTime));
+
+                if(patchFunctionList[0].object == 0 && curObj.patch == 0)
+                {
+                    patchFunctionList[0].object == curObj.value;
+                }
+                if(patchFunctionList[1].object == 0 && curObj.patch == 1)
+                {
+                    patchFunctionList[1].object == curObj.value;
+                }
+
+                cout<<"\nPatch 1 Cost : "<<patchFunctionList[0].cost<<", Patch 2 Cost : "<<patchFunctionList[1].cost<<"\n";
+
+                totalTime = 0;
+                randomWalkTime = 0;
+
+                {
+                    if(patchFunctionList[0].cost == 0 || patchFunctionList[1].cost == 0)
+                    {
+                        state = toSource;
+                    }
+                    else if((patchFunctionList[0].cost/patchFunctionList[1].cost) > (patchFunctionList[0].object * patchFunctionList[0].survial)/(patchFunctionList[1].object * patchFunctionList[1].survial))
+                    {
+                        state = toSource;
+                        lastSourceX = patchFunctionList[1].estimateX;
+                        lastSourceY = patchFunctionList[1].estimateY;
+                    }
+                    else if((patchFunctionList[0].cost/patchFunctionList[1].cost) < (patchFunctionList[0].object * patchFunctionList[0].survial)/(patchFunctionList[1].object * patchFunctionList[1].survial))
+                    {
+                        state = toSource;
+                        lastSourceX = patchFunctionList[0].estimateX;
+                        lastSourceY = patchFunctionList[0].estimateY;
+                    }
+                    else
+                    {
+                        state = toSource;
+                       // cout<<"State Changed : towards Source\n\n";
+                    }
+
+                }
+
 
                 //updatng state
-                state = toSource;
+               // state = toSource;
                 curObj.id = -1;
                 cout<<"State Changed : towards Source\n\n";
 
@@ -515,7 +596,7 @@ int main( int argc, char** argv )
                 //cout<<sourceDistance<<"is the source distance";
                 ros::Duration(0.5).sleep();
             }
-            sourceDirection += 0.0005;
+            sourceDirection += 0.01;
 
             //cout<<"dis travel"<<distanceTravelled<<"\n";
 
@@ -653,7 +734,7 @@ int main( int argc, char** argv )
                 robotY = lastY + (robotSpeed + sin(robotDirection));
                 ros::Duration(0.5).sleep();
                 randomWalkTime += 0.5;
-                cout<<"out of boundary";
+                cout<<"Out of boundary\n";
                 //continue;
             }
         }
@@ -670,7 +751,7 @@ int main( int argc, char** argv )
         ros::Duration(0.2).sleep();
         //logging record
         secs =ros::Time::now().toSec();
-        file<<"Time :"<<secs<<" | POS x : "<<thisRobotLocation.X<<" | POS y : "<<thisRobotLocation.Y<<" | State : "<<state<<" |\n";
+        file<<"Time :"<<secs<<" | POS x : "<<thisRobotLocation.X<<" | POS y : "<<thisRobotLocation.Y<<" | State : "<<state<<" | Cost 1 : "<<patchFunctionList[0].cost<<" | Cost 2 : "<<patchFunctionList[1].cost<<" |\n";
         file.flush();
         }
 }

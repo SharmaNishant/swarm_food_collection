@@ -1,0 +1,14 @@
+in master.cpp
+
+all the simulation details are hardcoded.
+
+in objects.cpp
+
+foodpatch value for both patches are hardcoded.
+object locations are hardcoded
+
+in mainBot.cpp
+
+center of both the patches.
+survival rate of both the patches.
+
