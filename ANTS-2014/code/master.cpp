@@ -104,7 +104,7 @@ int main( int argc, char** argv )
         time+=1;
 
         //When Time is up
-        if(time>=600)
+        if(time>=3600)
         {
             command.command=0;
             simCom.publish(command);

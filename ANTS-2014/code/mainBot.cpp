@@ -94,7 +94,8 @@ int id;
 int object;
 double estimateX, estimateY;
 double survial;
-float cost;
+double cost;
+int visit;
 }tempPatch;
 
 //structure to store the boundary details
@@ -230,19 +231,21 @@ void simulationDetails(const ants2014::simDet::ConstPtr& msg)
     }*/
 
     tempPatch.id = 0;
-    tempPatch.object = 0;
-    tempPatch.cost = 0;
+    tempPatch.object = 1;
+    tempPatch.cost = 0.8;
     tempPatch.estimateX = -15;
     tempPatch.estimateY = 15;
     tempPatch.survial = 0.8;
+    tempPatch.visit = 0;
     patchFunctionList.push_back(tempPatch);
 
     tempPatch.id = 1;
-    tempPatch.object = 0;
-    tempPatch.cost = 0;
+    tempPatch.object = 10;
+    tempPatch.cost = 2;
     tempPatch.estimateX = 15;
     tempPatch.estimateY = 15;
     tempPatch.survial = 0.2;
+    tempPatch.visit = 0;
     patchFunctionList.push_back(tempPatch);
 
     //setting boundary value
@@ -522,19 +525,19 @@ int main( int argc, char** argv )
                 tempX = robotX;
                 tempY = robotY;
                 if(curObj.patch == 0)
-                    patchFunctionList[0].cost = (0.75 * patchFunctionList[0].cost) + (0.25 * (( (totalTime) / (curObj.value * patchFunctionList[0].survial)) + randomWalkTime));
+                    patchFunctionList[0].cost = (0.9 * patchFunctionList[0].cost) + (0.1 * (( (totalTime) / (curObj.value * patchFunctionList[0].survial)) + randomWalkTime));
                 else
-                    patchFunctionList[1].cost = (0.75 * patchFunctionList[1].cost) + (0.25 * (( (totalTime) / (curObj.value * patchFunctionList[1].survial)) + randomWalkTime));
+                    patchFunctionList[1].cost = (0.9 * patchFunctionList[1].cost) + (0.1 * (( (totalTime) / (curObj.value * patchFunctionList[1].survial)) + randomWalkTime));
 
-                if(patchFunctionList[0].object == 0 && curObj.patch == 0)
+               /* if(patchFunctionList[0].object == 0 && curObj.patch == 0)
                 {
                     patchFunctionList[0].object == curObj.value;
                 }
                 if(patchFunctionList[1].object == 0 && curObj.patch == 1)
                 {
                     patchFunctionList[1].object == curObj.value;
-                }
-
+                }*/
+                patchFunctionList[curObj.patch].visit++;
                 cout<<"\nPatch 1 Cost : "<<patchFunctionList[0].cost<<", Patch 2 Cost : "<<patchFunctionList[1].cost<<"\n";
 
                 totalTime = 0;
@@ -545,13 +548,13 @@ int main( int argc, char** argv )
                     {
                         state = toSource;
                     }
-                    else if((patchFunctionList[0].cost/patchFunctionList[1].cost) > (patchFunctionList[0].object * patchFunctionList[0].survial)/(patchFunctionList[1].object * patchFunctionList[1].survial))
+                    else if((patchFunctionList[0].cost / ((patchFunctionList[0].object * patchFunctionList[0].survial))) > (patchFunctionList[1].cost/((patchFunctionList[1].object * patchFunctionList[1].survial))))
                     {
                         state = toSource;
                         lastSourceX = patchFunctionList[1].estimateX;
                         lastSourceY = patchFunctionList[1].estimateY;
                     }
-                    else if((patchFunctionList[0].cost/patchFunctionList[1].cost) < (patchFunctionList[0].object * patchFunctionList[0].survial)/(patchFunctionList[1].object * patchFunctionList[1].survial))
+                    else if((patchFunctionList[0].cost / ((patchFunctionList[0].object * patchFunctionList[0].survial))) < (patchFunctionList[1].cost/((patchFunctionList[1].object * patchFunctionList[1].survial))))
                     {
                         state = toSource;
                         lastSourceX = patchFunctionList[0].estimateX;
@@ -596,7 +599,7 @@ int main( int argc, char** argv )
                 //cout<<sourceDistance<<"is the source distance";
                 ros::Duration(0.5).sleep();
             }
-            sourceDirection += 0.01;
+            sourceDirection += 0.005;
 
             //cout<<"dis travel"<<distanceTravelled<<"\n";
 
@@ -752,6 +755,7 @@ int main( int argc, char** argv )
         //logging record
         secs =ros::Time::now().toSec();
         file<<"Time :"<<secs<<" | POS x : "<<thisRobotLocation.X<<" | POS y : "<<thisRobotLocation.Y<<" | State : "<<state<<" | Cost 1 : "<<patchFunctionList[0].cost<<" | Cost 2 : "<<patchFunctionList[1].cost<<" |\n";
+        file<<"|" << patchFunctionList[0].visit <<"|"<< patchFunctionList[1].visit <<"|\n";
         file.flush();
         }
 }
