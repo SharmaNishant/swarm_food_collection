@@ -97,6 +97,8 @@ int main( int argc, char** argv )
         exit(1);
     }
 
+    long runTime = 3600 * 1;
+
     while (ros::ok())
     {
         ros::spinOnce();
@@ -104,7 +106,7 @@ int main( int argc, char** argv )
         time+=1;
 
         //When Time is up
-        if(time>=3600)
+        if(time>=runTime)
         {
             command.command=0;
             simCom.publish(command);

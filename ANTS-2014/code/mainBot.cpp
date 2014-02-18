@@ -3,7 +3,7 @@
 *    Purpose: Robot simulation code for ROS and Rviz *
 *                                                    *
 *    @author Nishant Sharma                          *
-*    @version 0.5 13/02/14                           *
+*    @version 1.0 18/02/14                           *
 *****************************************************/
 
 //Including RosC++ Header Files
@@ -37,7 +37,7 @@ using namespace std;
 string rosName = "robot";
 int robotID=0;
 
-char filename[] = "robot1.txt";
+char filename[] = "robot.txt";
 
 //for
 fstream file;
@@ -46,21 +46,23 @@ float stepSize = 10.0;
 
 int state = randWalk;
 
+double alpha = 0.9, beta = 1, tradeOffValue;
+
 int totalObjectsDeposited = 0,towardsObjectFlag = 0, startSimulation = 0, ostacleFlag = 0;
 
-float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.001, robotDirection;
+float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.001, lifePenalty = 0.0001, robotLifeThreshold = 500, robotLifeCost = 0, robotDirection;
 
 float colisionAvoidDirection, distanceToSource, neighbourSearchLimit = 2.0, robotMinimumDistance = 1.0, robotRepulsionForce = 1.0;
 
 int selectedPatch = -1;
 
-long secs;
+long secs, startTime, tempTime;
 
 double robotX,robotY;
 
 //double estimatePatch1X = 100 , estimatePatch1Y = 100, estimatePatch2X = 100, estimatePatch2Y = 100;
 
-//double survialPatch1 = 0.2, survialPatch2 = 0.8;
+//double survivalPatch1 = 0.2, survivalPatch2 = 0.8;
 
 ants2014::robObj       robotObject;
 ants2014::robLocate    thisRobotLocation;
@@ -93,7 +95,7 @@ struct patchFunction{
 int id;
 int object;
 double estimateX, estimateY;
-double survial;
+double survival;
 double cost;
 int visit;
 }tempPatch;
@@ -232,19 +234,19 @@ void simulationDetails(const ants2014::simDet::ConstPtr& msg)
 
     tempPatch.id = 0;
     tempPatch.object = 1;
-    tempPatch.cost = 0.8;
+    tempPatch.cost = INT_MAX;
     tempPatch.estimateX = -15;
     tempPatch.estimateY = 15;
-    tempPatch.survial = 0.8;
+    tempPatch.survival = 0.8;
     tempPatch.visit = 0;
     patchFunctionList.push_back(tempPatch);
 
     tempPatch.id = 1;
     tempPatch.object = 10;
-    tempPatch.cost = 2;
+    tempPatch.cost = INT_MAX;
     tempPatch.estimateX = 15;
     tempPatch.estimateY = 15;
-    tempPatch.survial = 0.2;
+    tempPatch.survival = 0.2;
     tempPatch.visit = 0;
     patchFunctionList.push_back(tempPatch);
 
@@ -337,6 +339,8 @@ int main( int argc, char** argv )
     node_init();
     ros::init(argc, argv, rosName);
     ros::NodeHandle n;
+
+    startTime = ros::Time::now().toSec();
 
     //setting the publisher for the nodes
     ros::Publisher rviz = n.advertise<visualization_msgs::Marker>("visualization_marker", 10);
@@ -445,6 +449,24 @@ int main( int argc, char** argv )
 
                     state = toNest;
                     cout<<"State Changed : towards Nest\n\n";
+
+                    double life = rand()%100;
+                    life = life / 100;
+
+                    cout<<"\n\nLIFE value is : "<<life<<"\n\n";
+
+                    if(life > patchFunctionList[curObj.patch].survival)
+                    {
+                        robotSpeed -= lifePenalty;
+
+                        if(robotSpeed <= 0)
+                        {
+                            cout<<"\n\n\nBOT GOT KILLED!!!! :( :'(\n\n";
+                            file<<"\n\n\nBOT GOT KILLED!!!! :( :'(\n\n";
+                            exit(1);
+                        }
+                    }
+
 /*
                     //selecting new cost
                     cost = INT_MAX;
@@ -524,12 +546,12 @@ int main( int argc, char** argv )
                 //saving depositing point value
                 tempX = robotX;
                 tempY = robotY;
-                if(curObj.patch == 0)
-                    patchFunctionList[0].cost = (0.9 * patchFunctionList[0].cost) + (0.1 * (( (totalTime) / (curObj.value * patchFunctionList[0].survial)) + randomWalkTime));
+               /* if(curObj.patch == 0)
+                    patchFunctionList[0].cost = (0.9 * patchFunctionList[0].cost) + (0.1 * (( (totalTime) / (curObj.value * patchFunctionList[0].survival)) + randomWalkTime));
                 else
-                    patchFunctionList[1].cost = (0.9 * patchFunctionList[1].cost) + (0.1 * (( (totalTime) / (curObj.value * patchFunctionList[1].survial)) + randomWalkTime));
+                    patchFunctionList[1].cost = (0.9 * patchFunctionList[1].cost) + (0.1 * (( (totalTime) / (curObj.value * patchFunctionList[1].survival)) + randomWalkTime));
 
-               /* if(patchFunctionList[0].object == 0 && curObj.patch == 0)
+                if(patchFunctionList[0].object == 0 && curObj.patch == 0)
                 {
                     patchFunctionList[0].object == curObj.value;
                 }
@@ -537,24 +559,73 @@ int main( int argc, char** argv )
                 {
                     patchFunctionList[1].object == curObj.value;
                 }*/
-                patchFunctionList[curObj.patch].visit++;
-                cout<<"\nPatch 1 Cost : "<<patchFunctionList[0].cost<<", Patch 2 Cost : "<<patchFunctionList[1].cost<<"\n";
 
+                patchFunctionList[curObj.patch].visit++;
+                //cout<<"\nPatch 1 Cost : "<<patchFunctionList[0].cost<<", Patch 2 Cost : "<<patchFunctionList[1].cost<<"\n";
+
+                robotLifeCost = ( (1 - alpha) * robotLifeCost) + (alpha * (( (totalTime) / (curObj.value * patchFunctionList[curObj.patch].survival)) + randomWalkTime));
+
+                cout<<"\nLife Cost = " << robotLifeCost <<"\n\n";
                 totalTime = 0;
                 randomWalkTime = 0;
+                totalObjectsDeposited += curObj.value;
 
+                tradeOffValue = (robotLifeCost / totalObjectsDeposited) * (ros::Time::now().toSec() - startTime);
+
+                cout<<"\nTrade off Value = " << tradeOffValue <<"\n\n";
+
+
+                patchFunctionList[curObj.patch].cost = (100 * curObj.value * patchFunctionList[curObj.patch].survival) / ( sqrt(pow(curObj.x - robotX,2) + pow(curObj.y - robotY,2)));
+                patchFunctionList[curObj.patch].estimateX = curObj.x;
+                patchFunctionList[curObj.patch].estimateY = curObj.y;
+
+                cout<<"net Cost p1 "<< patchFunctionList[0].cost<<" | net Cost p2 "<<patchFunctionList[1].cost<<"\n\n";
+
+                if(tradeOffValue <= robotLifeThreshold)
                 {
-                    if(patchFunctionList[0].cost == 0 || patchFunctionList[1].cost == 0)
+                    cout<<"Towards safe place\n";
+                    if(patchFunctionList[0].survival > patchFunctionList[1].survival)
                     {
                         state = toSource;
+                        lastSourceX = patchFunctionList[0].estimateX;
+                        lastSourceY = patchFunctionList[0].estimateY;
                     }
-                    else if((patchFunctionList[0].cost / ((patchFunctionList[0].object * patchFunctionList[0].survial))) > (patchFunctionList[1].cost/((patchFunctionList[1].object * patchFunctionList[1].survial))))
+                    else
                     {
                         state = toSource;
                         lastSourceX = patchFunctionList[1].estimateX;
                         lastSourceY = patchFunctionList[1].estimateY;
                     }
-                    else if((patchFunctionList[0].cost / ((patchFunctionList[0].object * patchFunctionList[0].survial))) < (patchFunctionList[1].cost/((patchFunctionList[1].object * patchFunctionList[1].survial))))
+                }
+                else
+                {
+                    cout<<"Towards more Food value\n";
+                    if(patchFunctionList[0].cost > patchFunctionList[1].cost)
+                    {
+                        state = toSource;
+                        lastSourceX = patchFunctionList[0].estimateX;
+                        lastSourceY = patchFunctionList[0].estimateY;
+                    }
+                    else
+                    {
+                        state = toSource;
+                        lastSourceX = patchFunctionList[1].estimateX;
+                        lastSourceY = patchFunctionList[1].estimateY;
+                    }
+                }
+
+                /*{
+                    if(patchFunctionList[0].cost == 0 || patchFunctionList[1].cost == 0)
+                    {
+                        state = toSource;
+                    }
+                    else if((patchFunctionList[0].cost / ((patchFunctionList[0].object * patchFunctionList[0].survival))) > (patchFunctionList[1].cost/((patchFunctionList[1].object * patchFunctionList[1].survival))))
+                    {
+                        state = toSource;
+                        lastSourceX = patchFunctionList[1].estimateX;
+                        lastSourceY = patchFunctionList[1].estimateY;
+                    }
+                    else if((patchFunctionList[0].cost / ((patchFunctionList[0].object * patchFunctionList[0].survival))) < (patchFunctionList[1].cost/((patchFunctionList[1].object * patchFunctionList[1].survival))))
                     {
                         state = toSource;
                         lastSourceX = patchFunctionList[0].estimateX;
@@ -566,7 +637,7 @@ int main( int argc, char** argv )
                        // cout<<"State Changed : towards Source\n\n";
                     }
 
-                }
+                }*/
 
 
                 //updatng state
@@ -576,7 +647,7 @@ int main( int argc, char** argv )
 
                 distanceTravelled = 0;
                 sourceDetailSaveFlag = 0;
-                file<<"Object Deposited\n";
+               // file<<"Object Deposited\n";
             }
 
             robotRvizMarker.color = blue;
@@ -599,7 +670,7 @@ int main( int argc, char** argv )
                 //cout<<sourceDistance<<"is the source distance";
                 ros::Duration(0.5).sleep();
             }
-            sourceDirection += 0.005;
+            sourceDirection += 0.0001;
 
             //cout<<"dis travel"<<distanceTravelled<<"\n";
 
@@ -753,9 +824,9 @@ int main( int argc, char** argv )
 
         ros::Duration(0.2).sleep();
         //logging record
-        secs =ros::Time::now().toSec();
-        file<<"Time :"<<secs<<" | POS x : "<<thisRobotLocation.X<<" | POS y : "<<thisRobotLocation.Y<<" | State : "<<state<<" | Cost 1 : "<<patchFunctionList[0].cost<<" | Cost 2 : "<<patchFunctionList[1].cost<<" |\n";
-        file<<"|" << patchFunctionList[0].visit <<"|"<< patchFunctionList[1].visit <<"|\n";
+        secs = ros::Time::now().toSec();
+        file<<"Time :"<<secs<<" | POS x : "<<thisRobotLocation.X<<" | POS y : "<<thisRobotLocation.Y<<" | State : "<<state<<" | Cost 1 : "<<patchFunctionList[0].cost<<" | Cost 2 : "<<patchFunctionList[1].cost<<" | Patch 1 Visit : " << patchFunctionList[0].visit <<" | Patch 2 Visit : "<< patchFunctionList[1].visit <<" | totalFood : "<< totalObjectsDeposited<<"|\n";;
+        //file<<"|" << patchFunctionList[0].visit <<"|"<< patchFunctionList[1].visit <<"|\n";
         file.flush();
         }
 }
