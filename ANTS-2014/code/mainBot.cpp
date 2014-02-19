@@ -50,11 +50,11 @@ double alpha = 0.9, beta = 1, tradeOffValue;
 
 int totalObjectsDeposited = 0,towardsObjectFlag = 0, startSimulation = 0, ostacleFlag = 0;
 
-float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.001, lifePenalty = 0.0001, robotLifeThreshold = 500, robotLifeCost = 0, robotDirection;
+float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.75, lifePenalty = 0.02, robotLifeThreshold = 500, robotLifeCost = 0, robotDirection;
 
 float colisionAvoidDirection, distanceToSource, neighbourSearchLimit = 2.0, robotMinimumDistance = 1.0, robotRepulsionForce = 1.0;
 
-int selectedPatch = -1;
+int selectedPatch = -1, tradeOffFlag=0;
 
 long secs, startTime, tempTime;
 
@@ -79,7 +79,7 @@ float randomWalkTime,randWalkCount = 0;
 float neighbourSearchCenterX, neighbourSearchCenterY, neighbourSearchFlag = 0, neighbourSearchTime = 0;
 
 //for toNest
-float selectedLength = 100, totalTime, distanceTravelled, selectedCostID;
+float selectedLength = 100, totalTime, distanceTravelled = 0, selectedCostID;
 
 //for Cost
 //float lastStepTime, lastRandomWalkTime;
@@ -190,6 +190,12 @@ void node_init()
 
     // Set the robotRvizMarker type
     robotRvizMarker.type = visualization_msgs::Marker::SPHERE;
+
+
+
+    //state = toSource;
+    //lastSourceX = patchFunctionList[1].estimateX;
+    //lastSourceY = patchFunctionList[1].estimateY;
 }
 
 //function to start or stop the code based on the message received from the master node
@@ -326,9 +332,9 @@ void objectLocator(const ants2014::objLocate::ConstPtr& msg)
 //main function
 int main( int argc, char** argv )
 {
+
     //for randwalk in the beginning
     curObj.id = -1;
-
     //log file
     file.open (filename, std::fstream::out);// | std::fstream::app);
 
@@ -362,6 +368,13 @@ int main( int argc, char** argv )
 
     //waiting for master node's signal to start
     while(startSimulation == 0) ros::spinOnce();
+
+    int startPatch = rand() % 2;
+    state = toSource;
+    lastSourceX = patchFunctionList[startPatch].estimateX;
+    lastSourceY = patchFunctionList[startPatch].estimateY;
+    tempX = robotX;  tempY = robotY;
+    sourceDetailSaveFlag=0;
 
     while (ros::ok())
     {
@@ -457,8 +470,8 @@ int main( int argc, char** argv )
 
                     if(life > patchFunctionList[curObj.patch].survival)
                     {
-                        robotSpeed -= lifePenalty;
-
+                        robotSpeed -= lifePenalty*robotSpeed;
+                        cout<<"bot speed is : "<<robotSpeed<<"\n\n";
                         if(robotSpeed <= 0)
                         {
                             cout<<"\n\n\nBOT GOT KILLED!!!! :( :'(\n\n";
@@ -563,11 +576,10 @@ int main( int argc, char** argv )
                 patchFunctionList[curObj.patch].visit++;
                 //cout<<"\nPatch 1 Cost : "<<patchFunctionList[0].cost<<", Patch 2 Cost : "<<patchFunctionList[1].cost<<"\n";
 
-                robotLifeCost = ( (1 - alpha) * robotLifeCost) + (alpha * (( (totalTime) / (curObj.value * patchFunctionList[curObj.patch].survival)) + randomWalkTime));
+                robotLifeCost = ( (1 - alpha) * robotLifeCost) + (alpha * (( (totalTime) / (curObj.value)) + (beta * randomWalkTime)));
 
                 cout<<"\nLife Cost = " << robotLifeCost <<"\n\n";
-                totalTime = 0;
-                randomWalkTime = 0;
+
                 totalObjectsDeposited += curObj.value;
 
                 tradeOffValue = (robotLifeCost / totalObjectsDeposited) * (ros::Time::now().toSec() - startTime);
@@ -583,6 +595,7 @@ int main( int argc, char** argv )
 
                 if(tradeOffValue <= robotLifeThreshold)
                 {
+                    tradeOffFlag = 0;
                     cout<<"Towards safe place\n";
                     if(patchFunctionList[0].survival > patchFunctionList[1].survival)
                     {
@@ -599,6 +612,7 @@ int main( int argc, char** argv )
                 }
                 else
                 {
+                    tradeOffFlag = 1;
                     cout<<"Towards more Food value\n";
                     if(patchFunctionList[0].cost > patchFunctionList[1].cost)
                     {
@@ -613,6 +627,12 @@ int main( int argc, char** argv )
                         lastSourceY = patchFunctionList[1].estimateY;
                     }
                 }
+
+
+                file<<"Cost : "<< robotLifeCost<<" | lastStep Ts&Tp : "<< totalTime <<" | randWalkTime : "<<randomWalkTime<<" | foodValue : "<<curObj.value<<" | OverallTime : "<<((ros::Time::now().toSec() - startTime))<<" | totalObjectsDeposited : "<<totalObjectsDeposited<<" | netFoodValue 1 : "<<patchFunctionList[0].cost<<" | netFoodValue 2 : "<<patchFunctionList[1].cost<<" | tradeOffValue :"<<tradeOffValue<<" | tradeOFF : "<<tradeOffFlag<<" | lastSelectedPatch : "<<curObj.patch<<" | robotSpeed : "<<robotSpeed<<" |\n";
+
+                totalTime = 0;
+                randomWalkTime = 0;
 
                 /*{
                     if(patchFunctionList[0].cost == 0 || patchFunctionList[1].cost == 0)
@@ -748,37 +768,37 @@ int main( int argc, char** argv )
                 {
                         ostacleFlag = 1;
                         colisionAvoidDirection = atan2((robotY - robotLocationList[i].y),(robotX - robotLocationList[i].x));
-                        deviateX += (robotRepulsionForce - robotLocationList[i].dist) + cos(colisionAvoidDirection);
-                        deviateY += (robotRepulsionForce - robotLocationList[i].dist) + sin(colisionAvoidDirection);
+                        deviateX += ((robotRepulsionForce - robotLocationList[i].dist) * cos(colisionAvoidDirection));
+                        deviateY += ((robotRepulsionForce - robotLocationList[i].dist) * sin(colisionAvoidDirection));
                         ros::Duration(0.2).sleep();
                 }
             }
 
             if(state == randWalk)
             {
-                thisRobotLocation.X = robotX += robotSpeed + cos(robotDirection) + deviateX;
-                thisRobotLocation.Y = robotY += robotSpeed + sin(robotDirection) + deviateY;
+                thisRobotLocation.X = robotX =(robotX + (robotSpeed * cos(robotDirection)) + deviateX);
+                thisRobotLocation.Y = robotY =(robotY + (robotSpeed * sin(robotDirection)) + deviateY);
                 randomWalkTime += 0.2;
             }
 
             if(state == toSource)
             {
-                thisRobotLocation.X = robotX += robotSpeed + cos(sourceDirection) + deviateX;
-                thisRobotLocation.Y = robotY += robotSpeed + sin(sourceDirection) + deviateY;
+                thisRobotLocation.X = robotX = (robotX + (robotSpeed * cos(sourceDirection)) + deviateX);
+                thisRobotLocation.Y = robotY = (robotY + (robotSpeed * sin(sourceDirection)) + deviateY);
                 totalTime += 0.2;
             }
 
             if(state == toObject)
             {
-                thisRobotLocation.X = robotX += robotSpeed + cos(robotDirection) + deviateX;
-                thisRobotLocation.Y = robotY += robotSpeed + sin(robotDirection) + deviateY;
+                thisRobotLocation.X = robotX = (robotX + (robotSpeed * cos(robotDirection)) + deviateX);
+                thisRobotLocation.Y = robotY = (robotY + (robotSpeed * sin(robotDirection)) + deviateY);
                 totalTime += 0.2;
             }
 
             if(state == neighSearch)
             {
-                thisRobotLocation.X = robotX += robotSpeed + cos(robotDirection) + deviateX;
-                thisRobotLocation.Y = robotY += robotSpeed + sin(robotDirection) + deviateY;
+                thisRobotLocation.X = robotX = (robotX + (robotSpeed * cos(robotDirection)) + deviateX);
+                thisRobotLocation.Y = robotY = (robotY + (robotSpeed * sin(robotDirection)) + deviateY);
                 //if going out of the neighbourhood
                 if((sqrt(pow(neighbourSearchCenterX - robotX,2) + pow(neighbourSearchCenterY - robotY,2))) > neighbourSearchLimit )
                 {
@@ -791,8 +811,8 @@ int main( int argc, char** argv )
 
             if(state == toNest)
             {
-                thisRobotLocation.X = robotX += robotSpeed + cos(robotDirection) + deviateX;
-                thisRobotLocation.Y = robotY += robotSpeed + sin(robotDirection) + deviateY;
+                thisRobotLocation.X = robotX = (robotX + (robotSpeed * cos(robotDirection)) + deviateX);
+                thisRobotLocation.Y = robotY = (robotY + (robotSpeed * sin(robotDirection)) + deviateY);
                 totalTime += 0.2;
             }
 
@@ -804,8 +824,8 @@ int main( int argc, char** argv )
             if(!((0 < boundary.dv1m2) && (boundary.dv1m2 < boundary.dv12)) || !((0 < boundary.dv1m3) && (boundary.dv1m3 < boundary.dv13)))
             {
                 robotDirection = atan2((nest.y - lastY),(nest.x - lastX));
-                robotX = lastX + (robotSpeed + cos(robotDirection));
-                robotY = lastY + (robotSpeed + sin(robotDirection));
+                robotX = lastX + (robotSpeed * cos(robotDirection));
+                robotY = lastY + (robotSpeed * sin(robotDirection));
                 ros::Duration(0.5).sleep();
                 randomWalkTime += 0.5;
                 cout<<"Out of boundary\n";
@@ -825,7 +845,7 @@ int main( int argc, char** argv )
         ros::Duration(0.2).sleep();
         //logging record
         secs = ros::Time::now().toSec();
-        file<<"Time :"<<secs<<" | POS x : "<<thisRobotLocation.X<<" | POS y : "<<thisRobotLocation.Y<<" | State : "<<state<<" | Cost 1 : "<<patchFunctionList[0].cost<<" | Cost 2 : "<<patchFunctionList[1].cost<<" | Patch 1 Visit : " << patchFunctionList[0].visit <<" | Patch 2 Visit : "<< patchFunctionList[1].visit <<" | totalFood : "<< totalObjectsDeposited<<"|\n";;
+       // file<<"Time :"<<secs<<" | POS x : "<<thisRobotLocation.X<<" | POS y : "<<thisRobotLocation.Y<<" | State : "<<state<<" | Cost 1 : "<<patchFunctionList[0].cost<<" | Cost 2 : "<<patchFunctionList[1].cost<<" | Patch 1 Visit : " << patchFunctionList[0].visit <<" | Patch 2 Visit : "<< patchFunctionList[1].visit <<" | totalFood : "<< totalObjectsDeposited<<"|\n";;
         //file<<"|" << patchFunctionList[0].visit <<"|"<< patchFunctionList[1].visit <<"|\n";
         file.flush();
         }
