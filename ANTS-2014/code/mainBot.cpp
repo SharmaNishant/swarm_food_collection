@@ -46,15 +46,15 @@ float stepSize = 10.0;
 
 int state = randWalk;
 
-double alpha = 0.9, beta = 1, tradeOffValue;
+double alpha = 0.5, beta = 1, tradeOffValue;
 
 int totalObjectsDeposited = 0,towardsObjectFlag = 0, startSimulation = 0, ostacleFlag = 0;
 
-float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.75, lifePenalty = 0.02, robotLifeThreshold = 500, robotLifeCost = 0, robotDirection;
+float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.75, lifePenalty = 0, robotLifeThreshold = 500, robotLifeCost = 0, robotDirection;
 
 float colisionAvoidDirection, distanceToSource, neighbourSearchLimit = 2.0, robotMinimumDistance = 1.0, robotRepulsionForce = 1.0;
 
-int selectedPatch = -1, tradeOffFlag=0;
+int selectedPatch = -1, tradeOffFlag=0 , foodValue1 = 1, foodValue2 = 10;
 
 long secs, startTime, tempTime;
 
@@ -690,7 +690,11 @@ int main( int argc, char** argv )
                 //cout<<sourceDistance<<"is the source distance";
                 ros::Duration(0.5).sleep();
             }
-            sourceDirection += 0.0001;
+            int temp = rand()%2;
+            if(temp==1)
+                sourceDirection += 0.0001;
+            else
+                sourceDirection -= 0.0001;
 
             //cout<<"dis travel"<<distanceTravelled<<"\n";
 
