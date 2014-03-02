@@ -39,22 +39,27 @@ int robotID=0;
 
 char filename[] = "robot.txt";
 
-//for
+//variables that change during simulations
+double alpha = 0.5;
+float lifePenalty = 0, robotLifeThreshold = 500, patch2risk = 0.5;
+int foodValue1 = 1, foodValue2 = 10, penaltyParameter = 1; //penaltyParameter 1 for speed else for food value deposited
+
+
 fstream file;
 
 float stepSize = 10.0;
 
 int state = randWalk;
 
-double alpha = 0.5, beta = 1, tradeOffValue;
+double beta = 1, tradeOffValue;
 
 int totalObjectsDeposited = 0,towardsObjectFlag = 0, startSimulation = 0, ostacleFlag = 0;
 
-float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.75, lifePenalty = 0, robotLifeThreshold = 500, robotLifeCost = 0, robotDirection;
+float deviateX, deviateY, tempX, tempY, lastX, lastY, robotSpeed = 0.75,  robotLifeCost = 0, robotDirection;
 
 float colisionAvoidDirection, distanceToSource, neighbourSearchLimit = 2.0, robotMinimumDistance = 1.0, robotRepulsionForce = 1.0;
 
-int selectedPatch = -1, tradeOffFlag=0 , foodValue1 = 1, foodValue2 = 10;
+int selectedPatch = -1, tradeOffFlag=0 ;
 
 long secs, startTime, tempTime;
 
@@ -239,20 +244,20 @@ void simulationDetails(const ants2014::simDet::ConstPtr& msg)
     }*/
 
     tempPatch.id = 0;
-    tempPatch.object = 1;
+    tempPatch.object = foodValue1;
     tempPatch.cost = INT_MAX;
     tempPatch.estimateX = -15;
     tempPatch.estimateY = 15;
-    tempPatch.survival = 0.8;
+    tempPatch.survival = 1;
     tempPatch.visit = 0;
     patchFunctionList.push_back(tempPatch);
 
     tempPatch.id = 1;
-    tempPatch.object = 10;
+    tempPatch.object = foodValue2;
     tempPatch.cost = INT_MAX;
     tempPatch.estimateX = 15;
     tempPatch.estimateY = 15;
-    tempPatch.survival = 0.2;
+    tempPatch.survival = patch2risk;
     tempPatch.visit = 0;
     patchFunctionList.push_back(tempPatch);
 
@@ -470,7 +475,11 @@ int main( int argc, char** argv )
 
                     if(life > patchFunctionList[curObj.patch].survival)
                     {
+                        if(penaltyParameter == 1)
                         robotSpeed -= lifePenalty*robotSpeed;
+                        else
+                        totalObjectsDeposited -= lifePenalty*totalObjectsDeposited;
+
                         cout<<"bot speed is : "<<robotSpeed<<"\n\n";
                         if(robotSpeed <= 0)
                         {
@@ -629,8 +638,8 @@ int main( int argc, char** argv )
                 }
 
 
-                file<<"Cost : "<< robotLifeCost<<" | lastStep Ts&Tp : "<< totalTime <<" | randWalkTime : "<<randomWalkTime<<" | foodValue : "<<curObj.value<<" | OverallTime : "<<((ros::Time::now().toSec() - startTime))<<" | totalObjectsDeposited : "<<totalObjectsDeposited<<" | netFoodValue 1 : "<<patchFunctionList[0].cost<<" | netFoodValue 2 : "<<patchFunctionList[1].cost<<" | tradeOffValue :"<<tradeOffValue<<" | tradeOFF : "<<tradeOffFlag<<" | lastSelectedPatch : "<<curObj.patch<<" | robotSpeed : "<<robotSpeed<<" |\n";
-
+             //   file<<"Cost : "<< robotLifeCost<<" | lastStep Ts&Tp : "<< totalTime <<" | randWalkTime : "<<randomWalkTime<<" | foodValue : "<<curObj.value<<" | OverallTime : "<<((ros::Time::now().toSec() - startTime))<<" | totalObjectsDeposited : "<<totalObjectsDeposited<<" | netFoodValue 1 : "<<patchFunctionList[0].cost<<" | netFoodValue 2 : "<<patchFunctionList[1].cost<<" | tradeOffValue :"<<tradeOffValue<<" | tradeOFF : "<<tradeOffFlag<<" | lastSelectedPatch : "<<curObj.patch<<" | robotSpeed : "<<robotSpeed<<" |\n";
+                file<<robotLifeCost<<" "<<totalTime<<" "<<randomWalkTime<<" "<<((ros::Time::now().toSec() - startTime))<<" "<<totalObjectsDeposited<<" "<<tradeOffValue<<" "<<tradeOffFlag<<" "<<curObj.patch<<" "<<robotSpeed<<"\n";
                 totalTime = 0;
                 randomWalkTime = 0;
 

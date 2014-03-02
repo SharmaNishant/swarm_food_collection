@@ -97,7 +97,7 @@ int main( int argc, char** argv )
         exit(1);
     }
 
-    long runTime = 3600 * 1;
+    long runTime = 3600 * 4;
 
     while (ros::ok())
     {
