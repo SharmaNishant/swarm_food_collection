@@ -3,7 +3,7 @@
 *    Purpose: Object simulation code for ROS and Rviz *
 *                                                     *
 *    @author Nishant Sharma                           *
-*    @version 1.0 13/02/14                            *
+*    @version 1.0 02/06/14                            *
 *    @note objects have hardcoded values              *
 ******************************************************/
 

@@ -3,7 +3,7 @@
 *    Purpose: Robot simulation code for ROS and Rviz *
 *                                                    *
 *    @author Nishant Sharma                          *
-*    @version 1.0 18/02/14                           *
+*    @version 1.0 02/06/14                           *
 *****************************************************/
 
 //Including RosC++ Header Files
@@ -41,7 +41,7 @@ char filename[] = "robot.txt";
 
 //variables that change during simulations
 double alpha = 0.5;
-float lifePenalty = 0, robotLifeThreshold = 500, patch2risk = 0.5;
+float lifePenalty = 0, robotLifeThreshold = 1000, patch2Survival = 0.2;
 int foodValue1 = 1, foodValue2 = 10, penaltyParameter = 1; //penaltyParameter 1 for speed else for food value deposited
 
 
@@ -257,7 +257,7 @@ void simulationDetails(const ants2014::simDet::ConstPtr& msg)
     tempPatch.cost = INT_MAX;
     tempPatch.estimateX = 15;
     tempPatch.estimateY = 15;
-    tempPatch.survival = patch2risk;
+    tempPatch.survival = patch2Survival;
     tempPatch.visit = 0;
     patchFunctionList.push_back(tempPatch);
 
@@ -585,13 +585,13 @@ int main( int argc, char** argv )
                 patchFunctionList[curObj.patch].visit++;
                 //cout<<"\nPatch 1 Cost : "<<patchFunctionList[0].cost<<", Patch 2 Cost : "<<patchFunctionList[1].cost<<"\n";
 
-                robotLifeCost = ( (1 - alpha) * robotLifeCost) + (alpha * (( (totalTime) / (curObj.value)) + (beta * randomWalkTime)));
+                robotLifeCost = ( alpha * robotLifeCost) + ((1 - alpha) *  ((totalTime + randomWalkTime) / (curObj.value)));
 
                 cout<<"\nLife Cost = " << robotLifeCost <<"\n\n";
 
                 totalObjectsDeposited += curObj.value;
 
-                tradeOffValue = (robotLifeCost / totalObjectsDeposited) * (ros::Time::now().toSec() - startTime);
+                tradeOffValue = (robotLifeCost / (ros::Time::now().toSec() - startTime) ) * totalObjectsDeposited;
 
                 cout<<"\nTrade off Value = " << tradeOffValue <<"\n\n";
 
@@ -865,3 +865,4 @@ int main( int argc, char** argv )
 }
 
 /*The End*/
+

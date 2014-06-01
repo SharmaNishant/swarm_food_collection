@@ -3,7 +3,7 @@
 *    Purpose: Master node for simulation on ROS and Rviz *
 *                                                        *
 *    @author Nishant Sharma                              *
-*    @version 1.0 13/02/14                               *
+*    @version 1.0 02/06/14                               *
 *    @note Nest and boundary values are hardcoded        *
 *********************************************************/
 
@@ -98,7 +98,8 @@ int main( int argc, char** argv )
     }
 
     long runTime = 3600 * 4;
-
+    int tempTime;
+    int hour;
     while (ros::ok())
     {
         ros::spinOnce();
@@ -115,7 +116,13 @@ int main( int argc, char** argv )
             exit(1);
         }
 
-        if((time%60)==0) cout<<(time/60)<<" minutes passed\n\n";
+        if((time%60)==0)
+        {
+            tempTime = time;
+            hour = tempTime / 3600;
+            tempTime = tempTime % 3600;
+            cout<<hour<<" hours and "<<(tempTime/60)<<" minutes passed\n\n";
+        }
 
         ros::Duration(1).sleep();
     }
