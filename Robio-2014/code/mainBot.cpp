@@ -41,8 +41,8 @@ char filename[] = "robot.txt";
 
 //variables that change during simulations
 double alpha = 0.5;
-float lifePenalty = 0, robotLifeThreshold = 1000, patch2Survival = 0.2;
-int foodValue1 = 1, foodValue2 = 10, penaltyParameter = 1; //penaltyParameter 1 for speed else for food value deposited
+float lifePenalty = 0, robotLifeThreshold = 10000, patch2Survival = 0.2;
+int foodValue1 = 1, foodValue2 = 10, penaltyParameter = 1; //penaltyParameter 1 for speed
 
 
 fstream file;
@@ -585,13 +585,13 @@ int main( int argc, char** argv )
                 patchFunctionList[curObj.patch].visit++;
                 //cout<<"\nPatch 1 Cost : "<<patchFunctionList[0].cost<<", Patch 2 Cost : "<<patchFunctionList[1].cost<<"\n";
 
-                robotLifeCost = ( alpha * robotLifeCost) + ((1 - alpha) *  ((totalTime + randomWalkTime) / (curObj.value)));
+                robotLifeCost = ( alpha * robotLifeCost) + ((1 - alpha) *  ( (totalTime + randomWalkTime) ));
 
                 cout<<"\nLife Cost = " << robotLifeCost <<"\n\n";
 
                 totalObjectsDeposited += curObj.value;
 
-                tradeOffValue = (robotLifeCost / (ros::Time::now().toSec() - startTime) ) * totalObjectsDeposited;
+                tradeOffValue = (totalObjectsDeposited + 1 / (ros::Time::now().toSec() - startTime)  + robotLifeCost) ;
 
                 cout<<"\nTrade off Value = " << tradeOffValue <<"\n\n";
 
