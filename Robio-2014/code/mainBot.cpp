@@ -41,7 +41,7 @@ char filename[] = "robot.txt";
 
 //variables that change during simulations
 double alpha = 0.5;
-float lifePenalty = 0, robotLifeThreshold = 10000, patch2Survival = 0.2;
+float lifePenalty = 0, robotLifeThreshold = 1, patch2Survival = 0.2;
 int foodValue1 = 1, foodValue2 = 10, penaltyParameter = 1; //penaltyParameter 1 for speed
 
 
@@ -585,13 +585,13 @@ int main( int argc, char** argv )
                 patchFunctionList[curObj.patch].visit++;
                 //cout<<"\nPatch 1 Cost : "<<patchFunctionList[0].cost<<", Patch 2 Cost : "<<patchFunctionList[1].cost<<"\n";
 
-                robotLifeCost = ( alpha * robotLifeCost) + ((1 - alpha) *  ( (totalTime + randomWalkTime) ));
+             robotLifeCost = ( (alpha) * robotLifeCost) + ((1-alpha) * (( (totalTime+randomWalkTime) / (curObj.value))));
 
                 cout<<"\nLife Cost = " << robotLifeCost <<"\n\n";
 
                 totalObjectsDeposited += curObj.value;
 
-                tradeOffValue = (totalObjectsDeposited + 1 / (ros::Time::now().toSec() - startTime)  + robotLifeCost) ;
+                tradeOffValue = (robotLifeCost * totalObjectsDeposited) / (ros::Time::now().toSec() - startTime);
 
                 cout<<"\nTrade off Value = " << tradeOffValue <<"\n\n";
 
@@ -600,7 +600,7 @@ int main( int argc, char** argv )
                 patchFunctionList[curObj.patch].estimateX = curObj.x;
                 patchFunctionList[curObj.patch].estimateY = curObj.y;
 
-                cout<<"net Cost p1 "<< patchFunctionList[0].cost<<" | net Cost p2 "<<patchFunctionList[1].cost<<"\n\n";
+                //cout<<"net Cost p1 "<< patchFunctionList[0].cost<<" | net Cost p2 "<<patchFunctionList[1].cost<<"\n\n";
 
                 if(tradeOffValue <= robotLifeThreshold)
                 {
